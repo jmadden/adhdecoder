@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "adhdecoder",
+  "description": "Marketplace for the ADHDecoder plugin: the portable Core method, formats, and skills for closing the follow-up loop.",
+  "owner": { "name": "Jim Madden" },
+  "plugins": [
+    {
+      "name": "adhdecoder",
+      "source": "./",
+      "description": "Portable Core of ADHDecoder: the method, formats, and skills for closing the follow-up loop (chase-in / radiate-out). No personal or company data."
+    }
+  ]
+}
