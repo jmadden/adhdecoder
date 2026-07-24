@@ -1,0 +1,48 @@
+{
+  "_comment": "Copy this to your instance folder as config.json and fill it in. This file (the example) stays in the repo with NO real data. Your filled config.json lives in your private instance layer, never in the repo.",
+
+  "identity": {
+    "name": "<your name>",
+    "email": "<your email>",
+    "handles": {
+      "chat": "<your chat user id, e.g. Slack member id>",
+      "crm": "<your crm user id, if any>"
+    }
+  },
+
+  "storage": {
+    "adapter": "filesystem",
+    "instancePath": "<absolute path to your instance folder, e.g. ~/Vault/Work/_decoder>",
+    "knowledgePath": "<absolute path to your knowledge vault, e.g. ~/Vault/Work>",
+    "overrides": {
+      "stateFile": "state.json",
+      "radarFile": "Radar.md",
+      "archiveFile": "Radar Archive.md",
+      "tasksDir": "Tasks",
+      "dashboardFile": "Decoder Dashboard.html"
+    }
+  },
+
+  "watchlist": {
+    "customers": [],
+    "projects": [],
+    "people": []
+  },
+
+  "sources": [
+    { "type": "issues",   "enabled": false, "category": "~~issue tracker" },
+    { "type": "chat",     "enabled": false, "category": "~~chat" },
+    { "type": "email",    "enabled": false, "category": "~~email" },
+    { "type": "calendar", "enabled": false, "category": "~~calendar" },
+    { "type": "crm",      "enabled": false, "category": "~~crm" },
+    { "type": "docs",     "enabled": false, "category": "~~docs" },
+    { "type": "calls",    "enabled": false, "category": "~~calls" }
+  ],
+
+  "schedule": {
+    "pivots": ["08:30", "12:30", "16:00"],
+    "timezone": "America/Los_Angeles"
+  },
+
+  "lastSwept": null
+}
