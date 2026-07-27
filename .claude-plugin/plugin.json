@@ -1,6 +1,6 @@
 {
   "name": "adhdecoder",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Portable Core of ADHDecoder: the method, formats, and skills for closing the follow-up loop (chase-in / radiate-out). No personal or company data.",
   "author": { "name": "Jim Madden" }
 }
