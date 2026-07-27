@@ -51,6 +51,15 @@ the user (that is the "worked it partway then got distracted" failure).
   store) first; attach/enrich an existing item instead of creating a second one.
 - **Hide raw feeds.** Link to the source; never paste raw thread/email content
   into the ledger.
+- **Always read the full thread; never trust a mention/keyword search alone.**
+  (Validated 2026-07-27: a concise mention search showed the one customer SSO
+  question and the another customer "we need Eng help" ping as unanswered, but opening the
+  threads showed the user had already replied and acted the same day. Both were
+  false alarms.) Before flagging, open the thread and check the user's OWN
+  latest activity in it.
+- **Weekend / business-day-aware quiet windows.** Count business days, not
+  calendar days. Fri -> Mon is ~1 business day, not 3. Do not call something
+  stale across a weekend or a known OOO stretch.
 
 ## Per-source patterns (generic; exact mechanics live in each source adapter)
 

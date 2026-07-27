@@ -16,6 +16,11 @@ record shape before writing.
 
 ## Locate state
 
+0. **Select backend.** Read `config.ledger.backend` (default `builtin`). If
+   `builtin`, use `state.json` as below. If `tasknotes`, read/Query are served
+   by the read-only `ledger-tasknotes` adapter (`skills/ledger-tasknotes`, spec
+   in `reference/adapter-tasknotes.md`); writes stay on the builtin `state.json`
+   companion in v1.
 1. Read the instance `config.json` (its path is the configured `instancePath`,
    or ask the user once and remember it).
 2. State file = `<storage.instancePath>/<storage.overrides.stateFile>`
@@ -37,8 +42,11 @@ with one "Promise captured." line, then write.
 **Mark met / cleared.** Set `status: met` (delivered/received) or `cleared`
 (handled outside the system). Add a history line. Never delete the record.
 
-**Query.** Recompute `overdue` (expectBy < today, not met) and `stakes` at read
-time. Then present, grouped and sorted:
+**Query.** If the active backend is `tasknotes`, obtain the promise set from
+the `ledger-tasknotes` adapter (the union of open TaskNotes + builtin
+`state.json`), then apply the grouping/sorting/recompute below unchanged.
+Otherwise read `state.json`. Recompute `overdue` (expectBy < today, not met)
+and `stakes` at read time. Then present, grouped and sorted:
 
 - **They owe me** and **I owe them**, as two sections.
 - Within each: overdue first (most overdue on top), then due-soon, then the rest.
@@ -56,3 +64,7 @@ time. Then present, grouped and sorted:
 - **Single writer.** Assume one machine writes state; do not design for
   concurrent sweeps.
 - **Stakes are computed**, never hand-edited. Honor `stakesOverride` if set.
+- **Backend-aware, single write path.** Reads honor `config.ledger.backend`. In
+  v1 the `tasknotes` backend is read-only: mark-met / update / add actions
+  produce drafts for the user to apply, never vault writes. Builtin
+  `state.json` stays the only store ADHDecoder writes.

@@ -51,8 +51,10 @@ lastSwept, still open.** Category patterns (exact mechanics live in each source
 adapter, not here):
 
 - **`~~chat`:** threads the user engaged in that went quiet after their last
-  message; unanswered @mentions/pings; DMs awaiting reply. Search is
-  unreliable - back it with the `knownChannels` registry in the ledger.
+  message; unanswered @mentions/pings; DMs awaiting reply. A mention/keyword
+  search surfaces candidates but is not evidence by itself - back it with the
+  `knownChannels` registry in the ledger, and always open the full thread (see
+  Verify before flagging).
 - **`~~email`:** threads addressed to the user awaiting their reply. The signal
   is "last message is from someone else, to me, and I have not replied" -
   filter automated / no-reply senders. Do **not** rely on unread.
@@ -70,10 +72,12 @@ A ping is a **candidate, not a stall.**
    deliverable. Set `direction` (`they-owe-me` vs `i-owe-them`) accordingly.
 2. **Genuinely still open** - verified against the source of truth (below), not
    inferred from a ping.
-3. **Gone quiet** - no visible movement from the user within the quiet window.
-   Items the user **owns** (`i-owe-them`, in-flight) trip **sooner** than
-   things others owe the user (the "worked it partway then got distracted"
-   failure).
+3. **Gone quiet** - no visible movement from the user within the quiet window,
+   counted in **business days**, not calendar days (Fri -> Mon is ~1 business
+   day, not 3; do not call something stale across a weekend or a known OOO
+   stretch). Items the user **owns** (`i-owe-them`, in-flight) trip **sooner**
+   than things others owe the user (the "worked it partway then got
+   distracted" failure).
 4. **Someone is waiting** - a customer/context or a named person.
 
 ## Verify before flagging (do not skip)
@@ -83,6 +87,16 @@ tracker status, a case's state, or the thread's latest message. If the source
 of truth shows it resolved/closed, **drop it** - never chase a closed item (a
 chat thread can look hot while the tracked issue is already Done). Stamp
 `lastVerified` when you confirm.
+
+**Always read the full thread; never trust a mention/keyword search alone.**
+A search hit is a candidate, not proof of silence - open the thread and check
+the user's OWN latest activity in it before flagging. A keyword/mention search
+can show a thread as unanswered when the user already replied or acted (e.g. a
+Slack search surfacing a question and a separate "we need help" ping as
+untouched, when opening both threads showed the user had already responded the
+same day - both would have been false alarms). Confirm no reply/action from the
+user after the other party's last message, not just that a matching message
+exists.
 
 ## Dedup against the ledger
 
@@ -114,8 +128,11 @@ nothing to any customer-facing surface and sends nothing.
 
 - Never auto-send, never auto-post, never auto-create tasks elsewhere. Drafts
   and ledger records only.
-- Verify against the source of truth before flagging; a ping is only a
-  candidate.
+- Verify against the source of truth before flagging; a ping (or a bare
+  mention/keyword search hit) is only a candidate - read the full thread and
+  confirm the user hasn't already acted.
+- Count quiet windows in business days; never call something stale across a
+  weekend or known OOO stretch.
 - Dedup hard; enrich existing promises rather than duplicating.
 - Hide raw feeds - link, never paste. No hidden files. Single writer: all
   writes go through the ledger backend.
