@@ -23,11 +23,17 @@
     }
   },
 
+  "ledger": {
+    "backend": "builtin"
+  },
+
   "watchlist": {
     "customers": [],
     "projects": [],
     "people": []
   },
+
+  "contacts": {},
 
   "sources": [
     { "type": "issues",   "enabled": false, "category": "~~issue tracker" },

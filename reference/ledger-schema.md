@@ -44,6 +44,8 @@ plus the minimum needed to track and dedup. Everything else it references via
   "source": { "type": "issues", "ref": "ISSUE-123", "url": "https://..." },
   "created": "2026-07-24T11:05:00-07:00",
   "lastVerified": "2026-07-24T11:05:00-07:00",
+  "verifyStatus": null,
+  "verifyReason": null,
   "driftClearedUntil": null,
   "history": [
     { "ts": "2026-07-24T11:05:00-07:00", "note": "Promise captured." }
@@ -66,6 +68,12 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **stakesOverride** — `high` | `low` | null. User escape hatch. Wins over auto.
 - **source** — `{ type, ref, url }`. Link, never paste raw content.
 - **lastVerified** — ISO 8601, when a source last confirmed this promise.
+- **verifyStatus** — `verified-open` | `resolved` | `reassigned` |
+  `mis-attributed` | `unverifiable` | `null` (not yet reconciled). Set only by
+  the `reconcile` skill; doubles as the TTL cache paired with `lastVerified`.
+  Never hand-edited.
+- **verifyReason** — short plain-language reason from the last reconcile, or
+  `null`.
 - **driftClearedUntil** — ISO 8601 cooldown after a "handled offline" clear.
 - **history** — append-only log of `{ ts, note }`. Never rewrite prior entries.
 

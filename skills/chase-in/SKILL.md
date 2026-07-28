@@ -23,11 +23,12 @@ more prominent, never more numerous (No flood).
 
 ## What this does / does not do
 
-- **Reads the ledger only.** Locate and load promises exactly as the `ledger`
-  skill's Query does (via `config.json` -> `instancePath` -> `state.json`),
-  recomputing `overdue` and `stakes` at read time. Do not sweep sources. Do not
-  reach into Jira/Slack/email/CRM: source-based verification and auto-close are a
-  later capability.
+- **Reads the ledger, plus a reconcile pre-check.** Locate and load promises
+  exactly as the `ledger` skill's Query does, recomputing `overdue` and
+  `stakes` at read time. Do not sweep sources. Before drafting a nudge, cross-
+  check the item via the `reconcile` skill (see Reconcile pre-check below) -
+  that is chase-in's only source contact; it never queries Jira/Slack/email/
+  CRM directly itself.
 - **Drafts, never sends.** Every nudge is a draft the user approves and sends.
 - **Does not write.** Chase-in only reads. When the user acts on a nudge ("sent
   it", "mark met", "handled offline"), hand the status change or history line to
@@ -74,6 +75,29 @@ Pick the rung from how far past due and the stakes, not from a repeat count:
 One promise sits at exactly one rung per run. Moving up a rung is a state change,
 not a new item.
 
+## Reconcile pre-check (before drafting a nudge)
+
+Before drafting a nudge for a candidate item (after tiering/escalation
+above), call the `reconcile` skill. This is chase-in's only source
+cross-check - it never queries Jira/Slack/email/CRM directly; `reconcile`
+owns that, per source category, and caches results (~1/day TTL) so this stays
+cheap.
+
+- **`verified-open`** -> proceed to Draft the nudge below, as normal.
+- **`resolved`** -> drop from the board; it is done. For a `state.json`-backed
+  promise `reconcile` auto-marks it met. For a TaskNotes-derived promise,
+  surface its "looks done, close it?" draft instead of a nudge.
+- **`reassigned`** -> drop from the board with a brief note ("reassigned to
+  `<new owner>`, removed from your list").
+- **`mis-attributed`** -> withhold the nudge; flag instead: "this names
+  `<person>`, who isn't on `<customer>` - confirm."
+- **`unverifiable`** -> do not draft a confident nudge; surface "can't verify
+  - confirm manually" instead.
+
+Only reconcile the items about to appear on the board (the top few after
+tiering), never the whole ledger - reconciliation is cost-bounded to what's
+actually about to be chased.
+
 ## Draft the nudge (route by direction)
 
 Each slipping promise carries **one** small, specific, ready-to-send draft:
@@ -108,7 +132,8 @@ send.
   prominent, never duplicated. Respect `dismissedFromBoard`.
 - **Read-only.** No writes here; status/history changes go through the `ledger`
   skill.
-- **No source access.** Overdue is dates only; no Jira/Slack/email. No hidden
+- **No direct source access.** Overdue is dates only; any source cross-check
+  goes through the `reconcile` skill, never queried directly here. No hidden
   files.
 - **Advisor by default.** Help set the date and word the nudge; never invent a
   commitment for the user.

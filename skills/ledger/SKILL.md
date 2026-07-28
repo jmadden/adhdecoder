@@ -42,6 +42,14 @@ with one "Promise captured." line, then write.
 **Mark met / cleared.** Set `status: met` (delivered/received) or `cleared`
 (handled outside the system). Add a history line. Never delete the record.
 
+**Record reconcile result (state.json backend only).** Called by the
+`reconcile` skill after it cross-checks a promise's live source. Set
+`verifyStatus`, `verifyReason`, and refresh `lastVerified` to now; append one
+`history` line with the reason. If `verifyStatus` is `resolved`, also set
+`status: met` (bookkeeping, not a customer-facing action - the same spirit as
+`sweep`'s silent enrich). Never call this for a TaskNotes-derived promise -
+that backend stays read-only; `reconcile` surfaces a draft instead.
+
 **Query.** If the active backend is `tasknotes`, obtain the promise set from
 the `ledger-tasknotes` adapter (the union of open TaskNotes + builtin
 `state.json`), then apply the grouping/sorting/recompute below unchanged.

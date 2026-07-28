@@ -58,10 +58,13 @@ Per context, compose a short "Where things stand" draft with three sections
 One line per promise: the plain-language `what`, in reassuring customer tone,
 linking to its source. No internal ids, no raw ticket text.
 
-**Batched: one review per context.** Produce and present one context's draft
-at a time for the user's review/approval, not a wall of every customer at
-once (no flood). Move to the next context only after the current one is
-handled (approved, edited, or skipped).
+**Batched: one review per context.** For the context currently being drafted,
+reconcile each of its open/recently-closed promises (right before drafting -
+see Verified-only gate) and produce that one draft for the user's review, not
+a wall of every customer at once (no flood). Move to the next context - and
+reconcile its items - only after the current one is handled (approved,
+edited, or skipped). This keeps reconciliation bounded to what's actually
+about to be published.
 
 ## Mode 2 - already-answered catch (reactive)
 
@@ -77,25 +80,28 @@ holding line instead, and flag it for the user to verify first.
 
 ## Verified-only gate (do not skip)
 
-Only a promise **confirmed against its source of truth recently** goes into
-the customer-facing draft. There is no dedicated "verified" flag in the
-schema, so apply this read-time freshness check:
+Only a promise **reconciled against its live source of truth** goes into the
+customer-facing draft. Before including any promise, call the `reconcile`
+skill (respecting its TTL cache, so already-fresh items are not re-hit) and
+gate on its `verifyStatus`:
 
-- **Open items** (In flight / Waiting on you): include only if `lastVerified`
-  is within a recent freshness window (default **~5 business days** - tighten
-  for high-stakes/customer-visible contexts if the user wants). Anything
-  older was confirmed once, but not recently enough to publish as current
-  fact.
-- **Recently shipped:** include only items whose closing `history` line (the
-  met/cleared confirmation) falls within the ~1-2 week window - an old
-  closure re-surfacing is not "recent."
-- Anything failing either check is **withheld** from the main draft and moved
-  to a separate **"confirm before sending"** list instead - one line each,
-  with the reason ("not re-verified in N days"), so the user can quickly
-  confirm and add it, or leave it out.
+- **`verified-open`** -> include in In flight / Waiting on you as normal.
+- **`resolved`** -> route per `reconcile`'s own handling (auto-marked met for
+  `state.json`; a "looks done, close it?" draft for TaskNotes) - if it closed
+  recently, it can appear under Recently shipped.
+- **`reassigned`** -> drop from this context's draft; it is no longer this
+  promise's story to tell here.
+- **`mis-attributed`** -> withhold entirely and flag to the user separately
+  ("this names `<person>`, not on `<customer>` - confirm") - never let a
+  wrongly-tagged item near a customer draft.
+- **`unverifiable`** -> withhold from the main draft; move to "confirm before
+  sending" with the reason ("can't verify - confirm manually").
 
-This is the same spirit as `sweep`'s "verify before flagging" and `drift`'s
-staleness check, applied to the outward-facing side.
+This replaces a plain freshness check with an actual source cross-check - see
+`reference/reconciliation.md` for why (freshness alone missed a real
+mis-attributed item in practice). `reconcile` itself is store-agnostic and
+read-only except for its own `state.json` bookkeeping, so this gate works
+unchanged on any backend.
 
 ## Output shape
 
