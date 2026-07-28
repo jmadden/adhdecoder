@@ -86,7 +86,7 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
    a backend adapter supplies `lastVerified` - e.g. the TaskNotes adapter uses
    `dateModified` - this skill does the business-day math).
 4. Surface when: (`status` is `blocked` OR `stakes` is `high`) AND business
-   days >= ~2, **or** any open item AND business days >= ~5.
+   days >= ~2, **or** any open item AND business days >= ~15.
 
 Present as: `<what>` (`<owner>`) hasn't moved in `<N>` business days. Same
 observational tone, never "you're behind" or similar - the absence of a date
