@@ -36,8 +36,12 @@ slip from inattention, not forgetting.
   time-sensitive.
 - **Respects cooldown.** Skip any promise whose `driftClearedUntil` is still
   in the future.
-- **Respects dismissals.** Never resurface an id in `dismissedFromBoard`,
-  regardless of which path below flagged it.
+- **Respects dismissals and snoozes.** Never resurface an id in
+  `dismissedFromBoard` (permanent) or one whose `snoozedUntil` is still in the
+  future (temporary), regardless of which path below flagged it.
+- **Owns ongoing items.** `soft`/`none` (no-hard-deadline) items never date-chase
+  in `chase-in`; drift is where they surface if they go quiet - the existing
+  staleness paths below already cover them, no threshold change.
 - **Never writes.** The "handled offline" clear and its optional note are
   handed to the `ledger` skill; this skill only computes and displays.
 - **Observational tone only.** "Hasn't visibly moved in N days" - never
@@ -65,8 +69,8 @@ All of:
 1. `status` is `pending` (skip `met` / `cleared`).
 2. It is time-sensitive: `overdue` is true, OR (`due-soon` and `stakes` is
    `high`).
-3. `driftClearedUntil` is null or in the past (not in cooldown), and the id is
-   not in `dismissedFromBoard`.
+3. `driftClearedUntil` is null or in the past (not in cooldown), the id is not
+   in `dismissedFromBoard`, and `snoozedUntil` is null or in the past.
 4. Days since `lastVerified` is 3 or more - nothing has touched or confirmed
    it in that window while it is due or overdue.
 
@@ -80,8 +84,8 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 **staleness** instead of overdue-ness:
 
 1. `status` is `pending`, and `expectBy` is absent.
-2. `driftClearedUntil` is null or in the past, and the id is not in
-   `dismissedFromBoard`.
+2. `driftClearedUntil` is null or in the past, the id is not in
+   `dismissedFromBoard`, and `snoozedUntil` is null or in the past.
 3. Compute days since `lastVerified` in **business days** (exclude weekends;
    a backend adapter supplies `lastVerified` - e.g. the TaskNotes adapter uses
    `dateModified` - this skill does the business-day math).

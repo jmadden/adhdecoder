@@ -46,12 +46,12 @@ Do not re-hit a source for every promise on every run. Before dispatching:
   rather than calling the adapter again (e.g. when `panic` surfaces an item the
   `drift` check already reconciled).
 
-**Persistence is backend-scoped:** for a promise whose record lives in the
-`state.json` backend, persist the refreshed `lastVerified` + `verifyStatus` +
-`verifyReason` via the `ledger` skill's **Record reconcile result** operation.
-For a TaskNotes-derived promise, the note is read-only (no field to cache
-into) - the fresh result is used for this run only and is not persisted; it
-is re-checked next time it matters. Deliberate v1 tradeoff, not an oversight.
+**Persistence is backend-scoped:** persist the refreshed `lastVerified` +
+`verifyStatus` + `verifyReason` via the `ledger` skill's **Record reconcile
+result** operation. For a `state.json`-backed promise these live on the record;
+for a TaskNotes-derived promise they go to the `state.json` `itemMeta`
+companion keyed by the item id (never the note). Either way the result is
+cached against the TTL above.
 
 ## Per-source adapters
 
@@ -74,6 +74,28 @@ is re-checked next time it matters. Deliberate v1 tradeoff, not an oversight.
   system referenced IN the note (a Jira key, a chat channel) - not the note
   itself. Extract that reference and dispatch to the matching adapter above.
   No linkable reference -> `unverifiable`.
+
+## Delivery detection (email + chat adapters)
+
+Beyond confirming a promise is still open, the **email** and **chat** adapters
+also watch for the user having **delivered** the deliverable or handed the
+counterparty an action in a SENT message (config sent, request made, answer
+given). When detected, the user's move is done and the ball is now in the
+counterparty's court - the promise should become a they-owe follow-up:
+
+- **A matching `i-owe-them` promise exists** -> flip it. Builtin: apply via the
+  `ledger` skill's **Flip direction on delivery** (`direction: they-owe-me`,
+  `owner` = recipients, `what` = "confirm/complete <the action>", prompt the
+  user for a confirm-by `expectBy` + `why`). TaskNotes: never rewrite the note -
+  surface a "looks delivered - update the note?" draft AND register a new
+  they-owe follow-up in `state.json` via **Add a promise**.
+- **No matching promise exists** -> register a NEW they-owe-me handoff follow-up
+  so it is not lost.
+
+The reality gate still applies: a follow-up is logged only with `owner` +
+concrete `what` + a confirm-by date, or the user's explicit confirm. Never
+auto-send/auto-post; the flip/registration is a ledger action, and any outward
+message stays a draft. See `reference/handoff-followups.md`.
 
 ## Mis-attribution check (uses config.contacts)
 

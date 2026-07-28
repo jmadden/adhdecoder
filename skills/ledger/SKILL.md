@@ -42,19 +42,43 @@ with one "Promise captured." line, then write.
 **Mark met / cleared.** Set `status: met` (delivered/received) or `cleared`
 (handled outside the system). Add a history line. Never delete the record.
 
-**Record reconcile result (state.json backend only).** Called by the
-`reconcile` skill after it cross-checks a promise's live source. Set
-`verifyStatus`, `verifyReason`, and refresh `lastVerified` to now; append one
-`history` line with the reason. If `verifyStatus` is `resolved`, also set
+**Set snooze.** Set `snoozedUntil` to a date (temporary per-item dismiss). The
+record is **kept, never deleted** - this is distinct from `dismissedFromBoard`
+(permanent). Append a history line. Builtin -> write it on the record; TaskNotes
+-> write it to `itemMeta[<id>]`, never the note. "Unsnooze" clears it the same
+way.
+
+**Mark ongoing (set deadlineType).** Set `deadlineType` to `soft`/`none` (ongoing,
+no date-chasing) or back to `hard`. Builtin -> on the record; TaskNotes ->
+`itemMeta[<id>]` override, never the note.
+
+**Flip direction on delivery (builtin).** When the user has delivered the thing
+(see `reconcile` delivery detection), turn an `i-owe-them` promise into the
+they-owe follow-up: set `direction: they-owe-me`, `owner` = the recipients,
+`what` = "confirm/complete <the action>", `expectBy` = a confirm-by date, `why` =
+what it unblocks; append a history line ("delivered; now awaiting confirmation").
+Reality gate still applies. For a **TaskNotes** promise, never rewrite the note -
+`reconcile` proposes a note-update draft and registers a new they-owe follow-up
+via **Add a promise** instead.
+
+**Record reconcile result.** Called by the `reconcile` skill after it
+cross-checks a promise's live source. Set `verifyStatus`, `verifyReason`, and
+refresh `lastVerified` to now. Builtin -> write these on the record, append one
+`history` line with the reason, and if `verifyStatus` is `resolved` also set
 `status: met` (bookkeeping, not a customer-facing action - the same spirit as
-`sweep`'s silent enrich). Never call this for a TaskNotes-derived promise -
-that backend stays read-only; `reconcile` surfaces a draft instead.
+`sweep`'s silent enrich). TaskNotes-derived -> write the verify metadata to
+`itemMeta[<id>]` (never the note), and surface `resolved` as a "looks done,
+close it?" draft rather than auto-marking met.
 
 **Query.** If the active backend is `tasknotes`, obtain the promise set from
 the `ledger-tasknotes` adapter (the union of open TaskNotes + builtin
 `state.json`), then apply the grouping/sorting/recompute below unchanged.
-Otherwise read `state.json`. Recompute `overdue` (expectBy < today, not met)
-and `stakes` at read time. Then present, grouped and sorted:
+Otherwise read `state.json`. For TaskNotes-derived promises, overlay
+`itemMeta[<id>]` (`snoozedUntil`, `deadlineType`, verify metadata) onto the
+record at read time. Recompute `overdue` (expectBy < today, not met, AND
+`deadlineType` is `hard` - `soft`/`none` are never overdue) and `stakes` at read
+time. Expose `snoozedUntil` on each promise so consumers can skip snoozed items.
+Then present, grouped and sorted:
 
 - **They owe me** and **I owe them**, as two sections.
 - Within each: overdue first (most overdue on top), then due-soon, then the rest.
@@ -73,6 +97,9 @@ and `stakes` at read time. Then present, grouped and sorted:
   concurrent sweeps.
 - **Stakes are computed**, never hand-edited. Honor `stakesOverride` if set.
 - **Backend-aware, single write path.** Reads honor `config.ledger.backend`. In
-  v1 the `tasknotes` backend is read-only: mark-met / update / add actions
-  produce drafts for the user to apply, never vault writes. Builtin
-  `state.json` stays the only store ADHDecoder writes.
+  v1 the `tasknotes` backend is read-only for the note itself: mark-met / update
+  / flip / note-edit actions produce drafts for the user to apply, never vault
+  writes. ADHDecoder-owned overlay metadata for a read-only note (`snoozedUntil`,
+  `deadlineType` override, verify metadata) is written to the `itemMeta`
+  companion in `state.json`, never into the note. Builtin `state.json` stays the
+  only store ADHDecoder writes.

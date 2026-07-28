@@ -41,7 +41,10 @@ chase the user. Read `reference/radiate-out.md` (the full spec) and
 ## Load and group
 
 1. Call the ledger's Query (exactly as `chase-in` does) to get the full
-   promise set, recomputed fresh (overdue, stakes, etc.) at read time.
+   promise set, recomputed fresh (overdue, stakes, etc.) at read time. Honor
+   `deadlineType` (a `soft`/`none` ongoing item is never "overdue" - present it
+   as in-flight, never as a missed deadline) and `snoozedUntil` (a snoozed item
+   is excluded from the draft until its date).
 2. Group by `context` (the promise's context field - a customer, project, or
    any stakeholder group). Within a context, split by `direction` and `status`
    into the three buckets below.

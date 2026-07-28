@@ -70,12 +70,22 @@ confirmation to log it. If any is missing:
 - **i-owe-them** → goal is the user's committed date; if they cannot commit yet,
   draft a holding status ("I'll get you <thing> by <when>") and log only once a
   date exists. Never log a dateless "I owe."
+- **outbound handoff (the "both" case)** → when the user has just *handed a
+  counterparty an action* (delivered config, sent a request, asked them to do X),
+  the ball is now in their court but the user still drives it to confirmation.
+  Capture it as `direction: they-owe-me` with `owner` = the counterparty,
+  `what` = "confirm/complete <the action>", `expectBy` = a confirm-by date (ask
+  if not inferable), and `why` = what it unblocks. See
+  `reference/handoff-followups.md`. This is the capture-time twin of `reconcile`'s
+  delivery detection.
 
 ## Hand off to the ledger
 
 When the reality gate passes and the user confirms, invoke the `ledger` skill's
-**Add a promise** operation with `direction`, `what`, `owner`, `expectBy`, and
-`source` ({ type, ref, url } for the thread/item). The ledger builds the record
+**Add a promise** operation with `direction`, `what`, `owner`, `expectBy`,
+`source` ({ type, ref, url } for the thread/item), and, when known, `why` (what
+it unblocks - feeds stakes and nudge copy). `deadlineType` defaults to `hard`;
+set `soft`/`none` only for a genuinely ongoing item. The ledger builds the record
 per `reference/ledger-schema.md`, sets `status: pending`, stamps timestamps,
 seeds `history` with "Promise captured.", and writes `state.json` atomically. Do
 not duplicate that logic; do not touch `state.json` directly.

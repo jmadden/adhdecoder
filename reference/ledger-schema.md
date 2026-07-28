@@ -16,7 +16,8 @@ plus the minimum needed to track and dedup. Everything else it references via
   "promises": [],
   "dedup": { "seen": [] },
   "knownChannels": [],
-  "dismissedFromBoard": []
+  "dismissedFromBoard": [],
+  "itemMeta": {}
 }
 ```
 
@@ -26,6 +27,11 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **dedup.seen** — ids of items already decoded, so nothing is re-decoded.
 - **knownChannels** — `{ id, name, customer }` for chat channels to back-stop.
 - **dismissedFromBoard** — ids the user killed off the board; never re-surface.
+- **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, verifyStatus,
+  verifyReason, lastVerified } }`. Overlay store for items whose canonical
+  record is read-only (the TaskNotes backend). Builtin promises keep these on
+  the record; the companion is never written into a note. The Query overlays it
+  at read time.
 
 ## Promise record
 
@@ -46,6 +52,9 @@ plus the minimum needed to track and dedup. Everything else it references via
   "lastVerified": "2026-07-24T11:05:00-07:00",
   "verifyStatus": null,
   "verifyReason": null,
+  "why": null,
+  "deadlineType": "hard",
+  "snoozedUntil": null,
   "driftClearedUntil": null,
   "history": [
     { "ts": "2026-07-24T11:05:00-07:00", "note": "Promise captured." }
@@ -61,7 +70,8 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **owner** — a named person/party who owes it. Required to be chaseable.
 - **expectBy** — `YYYY-MM-DD`. Required to be chaseable.
 - **status** — `pending` | `met` | `overdue` | `cleared`.
-  - `overdue` is derived (expectBy < today and not met); persist it on write.
+  - `overdue` is derived (expectBy < today, not met, AND `deadlineType` is
+    `hard`); persist it on write. `soft`/`none` items are never overdue.
   - `cleared` = user dismissed/handled outside the system.
 - **stakes** — `high` | `normal`, auto-computed (see method.md). Recompute each
   read; do not hand-edit.
@@ -74,6 +84,14 @@ plus the minimum needed to track and dedup. Everything else it references via
   Never hand-edited.
 - **verifyReason** — short plain-language reason from the last reconcile, or
   `null`.
+- **why** — string or null. What the promise unblocks / why it matters. Feeds
+  stakes (a `why` naming a go-live or dated dependency -> high) and nudge copy.
+- **deadlineType** — `hard` (default) | `soft` | `none`. `overdue` is derived
+  ONLY when `hard`. `soft`/`none` are ongoing: never overdue, surface via drift
+  staleness only.
+- **snoozedUntil** — ISO date or null. Temporary per-item dismiss; the record is
+  kept, never deleted. Distinct from `dismissedFromBoard` (permanent). While in
+  the future, consumers do not surface the item as a chase.
 - **driftClearedUntil** — ISO 8601 cooldown after a "handled offline" clear.
 - **history** — append-only log of `{ ts, note }`. Never rewrite prior entries.
 

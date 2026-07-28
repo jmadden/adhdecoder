@@ -67,6 +67,15 @@ items visible instead of invisible. It is generic (any backend); the adapter
 just supplies `lastVerified` = `dateModified`, and the drift skill implements
 the rule.
 
+**deadlineType mapping + itemMeta overlay (fix, 2026-07-27).** Map
+`deadlineType` from the note: a real `due` -> `hard`; a note tagged `ongoing`
+(or carrying `scheduled` but no `due`) -> `soft`; otherwise default `hard`. This
+stops false overdue-chasing on ongoing work (chase-in only date-chases `hard`;
+`soft`/`none` surface via drift staleness). ADHDecoder-owned overlay fields for a
+read-only note - `snoozedUntil`, a `deadlineType` override, `why`, and verify
+metadata - live in the `state.json` `itemMeta` companion keyed by the note's item
+id, NEVER written into the note. The Query overlays them at read time.
+
 ## Never (hard, read-only)
 
 - Never write, create, rename, move, or modify any TaskNote or Radar file.

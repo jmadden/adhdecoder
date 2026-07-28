@@ -54,11 +54,23 @@ Per the field table in `reference/adapter-tasknotes.md`:
 | `expectBy` | `due` if present and non-empty. Blank/missing `due` -> open, no date: visible but NOT a chase candidate (no overdue) - see `drift`'s no-due staleness fallback instead. |
 | `status` | `todo`/`in-progress`/`blocked` -> open; `done` -> closed (skip chases; may show under "recently done"), use `completedDate` |
 | `stakes` | `priority` (high/medium/low) + standard auto-signals (roster customer, go-live, ...) |
-| `lastVerified` | `dateModified` |
+| `deadlineType` | real `due` present -> `hard`; `ongoing` tag (or `scheduled` without `due`) -> `soft`; else default `hard`. An `itemMeta` override wins. |
+| `why` | a note `why`/`why:` field if present, else the `itemMeta` overlay, else null |
+| `lastVerified` | `dateModified` (or the `itemMeta` verify timestamp if newer) |
 | `source` | an `obsidian://` link to the file |
 | `history` | the body's `update <ISO> - ...` lines, read verbatim (never modified) |
 
 Same verify spirit as the sweep: `status: done` is closed - never chase it.
+
+## Overlay the itemMeta companion (read time)
+
+A TaskNote is read-only, so ADHDecoder-owned overlay fields live in the
+`state.json` `itemMeta` companion keyed by the note's item id, NEVER in the
+note. At read time, overlay `itemMeta[<id>]` onto the derived promise:
+`snoozedUntil`, a `deadlineType` override, and verify metadata
+(`verifyStatus`/`verifyReason`/`lastVerified`). This is what lets snooze,
+mark-ongoing, and reconcile results persist for a note the plugin will not
+touch.
 
 ## Query (the read contract chase-in / drift / panic call)
 
@@ -83,10 +95,14 @@ Full unification of the two stores is deferred; v1 just reads the union.
 - Never write, create, rename, move, or modify any TaskNote or Radar file.
 - Never auto-create a TaskNote (including for sweep-found `they-owe-me` items -
   those stay in the builtin `state.json` companion).
-- When the user acts on a board item ("mark met", "handled", "log an update"),
-  produce a **draft edit or instruction** for the user to apply by hand, or let
-  their existing Decoder handle the write. ADHDecoder writes nothing to the
-  vault in v1.
+- When the user acts on a board item ("mark met", "handled", "log an update",
+  "flip to they-owe on delivery"), produce a **draft edit or instruction** for
+  the user to apply by hand, or let their existing Decoder handle the write.
+  ADHDecoder writes nothing to the vault in v1.
+- **Snooze / mark-ongoing / verify metadata go to the `itemMeta` companion**
+  (`state.json`), keyed by the note's item id - never the note. A delivery flip
+  registers a new they-owe follow-up in `state.json` (plus a draft to update the
+  note), rather than rewriting the note's direction.
 
 ## Coexistence
 

@@ -79,6 +79,7 @@ Computed each sweep from signals the sources already expose:
 - Issue-tracker priority High or above
 - A go-live within ~2 weeks
 - An expect-by date within ~2 days
+- A `why` naming a go-live or a dated dependency raises stakes to high
 - An explicit PCI / security / bigger-than-it-looks flag
 - A watchlist customer raises stakes; internal lowers them (tiebreak)
 

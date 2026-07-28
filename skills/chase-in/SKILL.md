@@ -50,6 +50,12 @@ These are display states derived from dates, not persisted. The ledger's `status
 (pending/met/overdue/cleared) is the source of truth for whether a promise is
 still open; skip anything `met` or `cleared`.
 
+**Only `deadlineType: hard` items get these date-driven states.** `soft`/`none`
+(ongoing) items never become due-soon/overdue here - a placeholder date must not
+manufacture a chase. They surface via `drift` staleness instead, not this board.
+Also skip any item whose `snoozedUntil` is in the future (temporary dismiss, kept
+not deleted - distinct from `dismissedFromBoard`).
+
 ## Tiering by stakes (who surfaces, when)
 
 Compute `stakes` per `method.md` (honor `stakesOverride`).
@@ -60,7 +66,9 @@ Compute `stakes` per `method.md` (honor `stakesOverride`).
   normal items; they join the board only once past due, then get louder as they
   age.
 
-Never surface `met` or `cleared` promises, or ids in `dismissedFromBoard`.
+Never surface `met` or `cleared` promises, ids in `dismissedFromBoard`, items
+snoozed into the future (`snoozedUntil`), or `soft`/`none` ongoing items (those
+belong to `drift`).
 
 ## Escalation ladder (tone by rung, from method.md)
 
@@ -111,6 +119,16 @@ Each slipping promise carries **one** small, specific, ready-to-send draft:
 
 Keep each draft to one deliverable and one ask (One move). Never auto-send.
 
+When a promise carries a `why`, use it in the nudge to make the stakes concrete
+("...so we can `<why>`").
+
+**Handoff follow-ups.** A handed-off action is a `they-owe-me` promise the user
+drives to confirmation (`owner` = counterparty, `what` = "confirm/complete X",
+`why` = what it unblocks); it surfaces via the they-owe path above. For each,
+also offer **"no follow-up needed this time"** -> hand off to the `ledger`
+skill's **Set snooze** (record kept, never deleted), which drops it from the
+board until the snooze date. See `reference/handoff-followups.md`.
+
 ## The board (output)
 
 Present a scannable board, not a feed:
@@ -129,7 +147,8 @@ send.
 
 - **Never auto-send, never auto-post.** Drafts only.
 - **No flood.** Each promise appears once, at its current rung; aging gets more
-  prominent, never duplicated. Respect `dismissedFromBoard`.
+  prominent, never duplicated. Respect `dismissedFromBoard` (permanent) and
+  `snoozedUntil` (temporary); never date-chase `soft`/`none` ongoing items.
 - **Read-only.** No writes here; status/history changes go through the `ledger`
   skill.
 - **No direct source access.** Overdue is dates only; any source cross-check
