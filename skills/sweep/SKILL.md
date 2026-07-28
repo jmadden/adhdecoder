@@ -38,10 +38,15 @@ ADHD design principles"), and `reference/ledger-schema.md` before running.
 ## Load config
 
 1. Read the instance `config.json` (via the `ledger` skill's Locate step).
-2. Sweep the **enabled** sources in the **order** listed in `config.sources`
-   (`{ type, enabled, category, provider }`). Source priority is config, not
-   code: one user lives in chat, another in email.
-3. Read `lastSwept` to scope each source to "changed since lastSwept." First
+2. Sweep the **enabled** sources ordered by **`weight`** (high first = deepest
+   coverage / more back-stop; low = a lighter pass; array order breaks ties).
+   Source priority is config, not code: one user lives in chat, another in
+   email. `weight` shapes both order and depth.
+3. Honor each source's **`cadence`** when a caller scopes the run: always
+   include `every-run` sources; include `hourly` / `daily` sources when they are
+   due. The `daily-run` routine guarantees every enabled source is swept at
+   least once per calendar day, so nothing (even `low` / `daily`) is ignored.
+4. Read `lastSwept` to scope each source to "changed since lastSwept." First
    run: use a sensible recent window.
 
 ## Find candidates (per source, generic)

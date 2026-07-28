@@ -135,8 +135,10 @@ Present a scannable board, not a feed:
 
 1. **One move first:** the single most urgent item and its one next action, up top.
 2. Two sections: **They owe me** and **I owe them.**
-3. Within each: aging first, then overdue, then due-today, then due-soon.
-   High-stakes flagged.
+3. Within each: high-stakes first, then by time (aging, overdue, due-today,
+   due-soon). Source `weight` breaks ties **only** between otherwise-equal
+   items - ranking is stakes > time > weight, so a low-weight source's genuine
+   emergency still surfaces at the top (see `reference/scheduling.md`).
 4. Per item, one line of facts: `what` - `owner` - `expectBy` (+ days over/until) -
    state - a clickable `source.url` (the actionable source; if `noteOnly`, the
    note link with a small "(note)" hint), optionally `noteRef` too, then its

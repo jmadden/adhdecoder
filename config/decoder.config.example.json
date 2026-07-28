@@ -35,19 +35,21 @@
 
   "contacts": {},
 
+  "_sources_comment": "weight (high|medium|low, default medium) sets sweep order/depth and is a tiebreak in surfacing; cadence (every-run|daily|hourly, default every-run) sets how often. See reference/scheduling.md. Tune per source, e.g. chat high/every-run, issues low/daily.",
   "sources": [
-    { "type": "issues",   "enabled": false, "category": "~~issue tracker" },
-    { "type": "chat",     "enabled": false, "category": "~~chat" },
-    { "type": "email",    "enabled": false, "category": "~~email" },
-    { "type": "calendar", "enabled": false, "category": "~~calendar" },
-    { "type": "crm",      "enabled": false, "category": "~~crm" },
-    { "type": "docs",     "enabled": false, "category": "~~docs" },
-    { "type": "calls",    "enabled": false, "category": "~~calls" }
+    { "type": "issues",   "enabled": false, "category": "~~issue tracker", "weight": "medium", "cadence": "every-run" },
+    { "type": "chat",     "enabled": false, "category": "~~chat",          "weight": "medium", "cadence": "every-run" },
+    { "type": "email",    "enabled": false, "category": "~~email",         "weight": "medium", "cadence": "every-run" },
+    { "type": "calendar", "enabled": false, "category": "~~calendar",      "weight": "medium", "cadence": "every-run" },
+    { "type": "crm",      "enabled": false, "category": "~~crm",           "weight": "medium", "cadence": "every-run" },
+    { "type": "docs",     "enabled": false, "category": "~~docs",          "weight": "medium", "cadence": "every-run" },
+    { "type": "calls",    "enabled": false, "category": "~~calls",         "weight": "medium", "cadence": "every-run" }
   ],
 
   "schedule": {
     "pivots": ["08:30", "12:30", "16:00"],
-    "timezone": "America/Los_Angeles"
+    "timezone": "America/Los_Angeles",
+    "boardPath": "<path where the refreshed board file is written each run; unset = print to chat only>"
   },
 
   "lastSwept": null

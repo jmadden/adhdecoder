@@ -59,6 +59,10 @@ Per context, compose a short "Where things stand" draft with three sections
 - **Recently shipped** - promises `met`/`cleared` in roughly the last 1-2
   weeks.
 
+Within a section, order more-urgent first (stakes, then time), using source
+`weight` only as a final tiebreak between otherwise-equal items (see
+`reference/scheduling.md`).
+
 One line per promise: the plain-language `what`, in a reassuring, plain tone.
 **No internal links.** A customer draft omits `source.url` / `noteRef`
 (tracker / chat / internal-doc links); include a link only if it is explicitly

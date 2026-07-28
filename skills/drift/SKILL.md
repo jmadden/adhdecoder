@@ -138,7 +138,9 @@ auto-clear a flag.
 
 - Never auto-clear, never auto-send, never auto-post.
 - No flood. Dedup against already-cleared/cooldown items; cap the standalone
-  list to a scannable handful even if more qualify.
+  list to a scannable handful even if more qualify. When ordering/capping, rank
+  stakes > staleness > source `weight` (weight is only a tiebreak between
+  otherwise-equal items; see `reference/scheduling.md`).
 - No hidden files. This skill writes nothing; all writes route through the
   `ledger` skill.
 - Source cross-check runs through `reconcile` (read-only against sources and

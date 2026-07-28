@@ -52,7 +52,36 @@ The plugin talks to storage through an adapter, not a hardcoded location.
 2. Install the plugin into Claude Code.
 3. Copy `config/decoder.config.example.json` to your instance folder as
    `config.json` and fill in your paths, identity, watchlist, and sources.
+   For each source set `weight` (high|medium|low) and `cadence`
+   (every-run|daily|hourly); see Scheduling below.
 4. Point `instancePath` at that folder and `knowledgePath` at your vault.
+
+## Scheduling (run it without remembering to)
+
+ADHDecoder can run on a schedule via the `daily-run` routine, which does one
+non-interactive pass: sweep the configured sources (ordered by `weight`,
+honoring `cadence`, every enabled source at least once a day) → reconcile the
+about-to-surface items → update the ledger → refresh a read-only **board file**
+→ print a one-line recap. It drafts and updates only; it never auto-sends or
+auto-posts. Full detail in `reference/scheduling.md`.
+
+Wire it up:
+
+- **Trigger the routine at your `pivots`.** The plugin describes the routine;
+  your host scheduler runs it. In Cowork, add a scheduled task at each time in
+  `schedule.pivots` that invokes the `daily-run` skill. (`pivots` and
+  `timezone` live in your `config.json`.)
+- **"Early and often" (optional).** Add extra light runs (e.g. hourly) that
+  sweep only `every-run` / high-`weight` sources, so chat stays fresh without
+  re-hitting everything.
+- **Set `schedule.boardPath`** to a durable file (e.g. in your vault). Each run
+  overwrites it with the current board (chase-in + drift + handoff follow-ups,
+  with source links) — the place to look between runs. If unset, a run only
+  prints to chat.
+
+`weight` and `cadence` shape emphasis and frequency, but never urgency: ranking
+is always stakes > time > weight, so a genuine emergency from a low-weight
+source still surfaces first.
 
 ## Build phases
 
