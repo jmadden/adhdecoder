@@ -22,10 +22,12 @@ Never let bucket 2 or 3 content leak into this repo.
 ## Layout
 
 ```
-.claude-plugin/plugin.json   manifest (name: adhdecoder)
+.claude-plugin/plugin.json   manifest (name: adhdecoder), version bumped per change
 skills/<name>/SKILL.md        skills (instructions FOR Claude)
 reference/method.md           the durable method (the brain)
-reference/ledger-schema.md    Phase 1 promise record shape
+reference/ledger-schema.md    promise record shape + itemMeta companion
+reference/*.md                per-capability specs (sweep, reconciliation,
+                              radiate-out, adapter-tasknotes, handoff-followups)
 config/*.example.json         TEMPLATES only, no real data
 CONNECTORS.md                 tool-category placeholders (~~category)
 ```
@@ -55,13 +57,50 @@ CONNECTORS.md                 tool-category placeholders (~~category)
 - **Connector (later):** cloud-native stores that serve placeholders (Google
   Drive). Reads/writes via API, not a path.
 
-## Build phases
+## Ledger backends
 
-1. **Ledger (done):** the promise store. `skills/ledger/`.
-2. **Set the clock:** capture promises in/out.
-3. **Chase in:** surface slips as ready-to-send nudges, tiered by stakes.
-4. **Radiate out:** publish status; ships last, verified-only.
-5. **Panic button + drift:** reactive + passive, alongside.
+Separate axis from storage adapters. `config.ledger.backend` selects the promise
+store, read via the `ledger` skill's Query so read-side skills are
+backend-agnostic:
 
-When adding sweep skills, port the *technique* (how to query a category), never
-the specific ids or rosters.
+- **builtin** (default): `state.json` in the instance layer. The only store
+  ADHDecoder writes.
+- **tasknotes:** read-only overlay of the user's Obsidian TaskNotes. Never writes
+  the note; ADHDecoder-owned metadata (snooze, `deadlineType` override, verify
+  results) goes to the `state.json` `itemMeta` companion keyed by item id.
+
+## What's built
+
+The full loop plus a cross-cutting verification layer. Each is a skill under
+`skills/<name>/`:
+
+- **ledger** (Phase 1): the promise store + Query interface every read-side skill
+  calls. Backend-aware (see Ledger backends).
+- **set-the-clock** (Phase 2): capture promises as work flows in/out, incl.
+  outbound handoffs (they-owe + confirm-by + `why`).
+- **chase-in** (Phase 3): surface slips as tiered, ready-to-send nudges.
+- **radiate-out** (Phase 4): publish per-context status, verified-only.
+- **panic** + **drift**: reactive spiral-breaker + passive staleness flag.
+- **sweep**: source-facing pass that populates the ledger from configured
+  sources; verifies via the reconcile adapters.
+- **reconcile** (cross-cutting): cross-check a promise against its live source
+  before any skill chases/publishes. One verification path — chase-in /
+  radiate-out / drift / panic / sweep all call it.
+- **ledger-tasknotes**: the optional read-only TaskNotes backend.
+
+Refinements layered on: `why` / `deadlineType` (hard/soft/none) / `snoozedUntil`
+promise fields; handoff follow-ups; delivery-flip (i-owe → they-owe) in reconcile.
+
+When adding sweep/source skills, port the *technique* (how to query a category),
+never the specific ids or rosters.
+
+## Shipping a change (gotcha)
+
+Edits to skills/reference do NOT take effect in an installed instance until:
+
+1. Bump `.claude-plugin/plugin.json` version (the cache is version-keyed; same
+   version = stale cache served).
+2. Reinstall from the **local path**, not the GitHub marketplace (the
+   GitHub-backed marketplace clone can lag): `/plugin marketplace remove
+   adhdecoder` → `/plugin marketplace add <repo path>` → `/plugin install
+   adhdecoder@adhdecoder` → `/reload-plugins`.
