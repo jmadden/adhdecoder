@@ -82,21 +82,24 @@ A ping is a **candidate, not a stall.**
 
 ## Verify before flagging (do not skip)
 
-Cross-check each candidate's underlying status before surfacing: an issue's
-tracker status, a case's state, or the thread's latest message. If the source
-of truth shows it resolved/closed, **drop it** - never chase a closed item (a
-chat thread can look hot while the tracked issue is already Done). Stamp
-`lastVerified` when you confirm.
+Run each candidate through the **same per-source reconcile adapter** the rest of
+ADHDecoder uses (`reconcile`, dispatched by the candidate's source type) - one
+verification path, no bespoke duplicate logic here. Pass the candidate's source
+(`{ type, ref, url }`); reconcile returns the same status set:
 
-**Always read the full thread; never trust a mention/keyword search alone.**
-A search hit is a candidate, not proof of silence - open the thread and check
-the user's OWN latest activity in it before flagging. A keyword/mention search
-can show a thread as unanswered when the user already replied or acted (e.g. a
-Slack search surfacing a question and a separate "we need help" ping as
-untouched, when opening both threads showed the user had already responded the
-same day - both would have been false alarms). Confirm no reply/action from the
-user after the other party's last message, not just that a matching message
-exists.
+- **`resolved`** -> drop it. Never chase a closed item (a chat thread can look
+  hot while the tracked issue is already Done).
+- **`reassigned`** -> it is no longer the user's; do not add it to the chase
+  list.
+- **`mis-attributed`** -> do not create a chase; surface it to confirm the tag.
+- **`verified-open`** -> a real stall; proceed to dedup + write. Reconcile has
+  already refreshed `lastVerified`.
+
+Honor reconcile's TTL cache: a candidate that dedups to an existing promise
+reconciled within ~1 day reuses that result instead of re-hitting the source
+(dedup below runs first for exactly this reason). The read-the-full-thread rule
+for chat now lives in reconcile's chat adapter, so the same care applies without
+being duplicated here.
 
 ## Dedup against the ledger
 
@@ -128,9 +131,8 @@ nothing to any customer-facing surface and sends nothing.
 
 - Never auto-send, never auto-post, never auto-create tasks elsewhere. Drafts
   and ledger records only.
-- Verify against the source of truth before flagging; a ping (or a bare
-  mention/keyword search hit) is only a candidate - read the full thread and
-  confirm the user hasn't already acted.
+- Verify every candidate through the shared `reconcile` adapters before
+  flagging; a ping (or a bare mention/keyword search hit) is only a candidate.
 - Count quiet windows in business days; never call something stale across a
   weekend or known OOO stretch.
 - Dedup hard; enrich existing promises rather than duplicating.

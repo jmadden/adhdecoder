@@ -4,12 +4,14 @@ description: >
   Flag promises that look stalled, observationally, never accusingly. Use
   when the user asks "what's drifting", "what's stalled", "what have I not
   touched", or "check for drift", and internally whenever `panic` runs its
-  drift check, or as a quiet passive flag on a sweep. Derives drift from the
-  ledger only: days since lastVerified + overdue/due-soon-high-stakes for
-  dated promises, plus a business-day staleness fallback for OPEN promises
-  with no expectBy (common on real TaskNotes data), since no activity-source
-  data exists yet. Offers a one-tap "handled offline" clear. Never writes
-  directly; hands the clear to the `ledger` skill.
+  drift check, or as a quiet passive flag on a sweep. Detects staleness from
+  the ledger (days since lastVerified + overdue/due-soon-high-stakes for dated
+  promises, plus a business-day fallback for OPEN promises with no expectBy,
+  common on real TaskNotes data), then reconciles each surfaced candidate
+  against its live source so it never flags a resolved, reassigned, or
+  mis-tagged item. Offers a one-tap "handled offline" clear. Never writes
+  directly; the clear routes through the `ledger` skill, the source cross-check
+  through `reconcile`.
 ---
 
 # Drift
@@ -22,10 +24,13 @@ slip from inattention, not forgetting.
 
 ## What this does / does not do
 
-- **Reads the ledger only.** No activity data from sources exists yet (no
-  sweep), so drift here is an **approximation**: staleness by date, not by
-  what the user has actually touched. Say so if asked; true activity-based
-  drift is a later capability.
+- **Detects from the ledger, then reconciles what it surfaces.** Staleness is
+  computed from ledger dates - an **approximation** of activity (how long since
+  the record was last confirmed, not a live activity feed). Before surfacing any
+  candidate, cross-check it via the `reconcile` skill, bounded to the candidates
+  (never the whole ledger), so a resolved/reassigned/mis-tagged item never
+  appears. Deep activity-based drift (comparing to everything the user actually
+  touched) remains a later capability.
 - **Fires only on time-sensitive items** - overdue (any stakes) or due-soon at
   high stakes. Never flag something with slack unless it is already
   time-sensitive.
@@ -41,7 +46,8 @@ slip from inattention, not forgetting.
 ## Two ways this runs
 
 - **Inside `panic`:** called for its drift-check section; keep output to one
-  or two lines.
+  or two lines. Reconcile results are shared with panic within the run, so an
+  item is never verified twice.
 - **Standalone / passive:** run directly ("what's drifting"), or as a quiet
   flag each sweep once sweeping exists. Standalone can show the full flagged
   list (still capped, still deduped - see Guardrails).
@@ -90,6 +96,28 @@ fallback exists specifically to make it visible.
 This fallback is generic across backends, not TaskNotes-specific: any backend
 that supplies `lastVerified` gets it for free.
 
+## Reconcile pre-check (before surfacing)
+
+Once the candidates are computed (either path above), reconcile **only those
+candidates** via the `reconcile` skill before showing anything - never the
+whole ledger. Honor reconcile's TTL cache (an item verified within ~1 day
+reuses its cached result; a result already produced earlier this run - e.g. by
+a `panic` that also calls drift - is reused, not re-fetched).
+
+- **`verified-open`** -> surface as a drift flag, as computed.
+- **`resolved`** -> drop it; it is done, not drifting. For a `state.json`
+  promise `reconcile` marks it met; for TaskNotes it surfaces a "looks done,
+  close it?" draft.
+- **`reassigned`** -> drop it; it left the user's plate.
+- **`mis-attributed`** -> do not present as a plain drift item; surface it
+  clearly marked **"confirm"** with the reconcile `reason` ("names `<person>`,
+  not on `<context>`").
+- **`unverifiable`** -> surface clearly marked **"confirm"** with the reason
+  ("can't verify - confirm manually"), never as a settled drift fact.
+
+So the drift list is: verified-open items shown normally, plus any
+mis-attributed / unverifiable ones clearly set apart under "confirm."
+
 ## The "handled offline" clear
 
 Offer a one-tap clear per flagged item: "Handled offline?" with an optional,
@@ -107,5 +135,8 @@ auto-clear a flag.
   list to a scannable handful even if more qualify.
 - No hidden files. This skill writes nothing; all writes route through the
   `ledger` skill.
+- Source cross-check runs through `reconcile` (read-only against sources and
+  TaskNotes); drift writes nothing itself, and any verify-metadata refresh is
+  reconcile's own `state.json` bookkeeping.
 - Advisor by default: report what looks stalled, let the user say what
   actually happened.

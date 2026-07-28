@@ -90,7 +90,7 @@ cheap.
 - **`reassigned`** -> drop from the board with a brief note ("reassigned to
   `<new owner>`, removed from your list").
 - **`mis-attributed`** -> withhold the nudge; flag instead: "this names
-  `<person>`, who isn't on `<customer>` - confirm."
+  `<person>`, who isn't on `<context>` - confirm."
 - **`unverifiable`** -> do not draft a confident nudge; surface "can't verify
   - confirm manually" instead.
 

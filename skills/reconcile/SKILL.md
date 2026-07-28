@@ -5,8 +5,9 @@ description: >
   published, so stale or mis-tagged ledger records never drive an action. Use
   when the user says things like "verify this", "double-check X against
   Jira/Salesforce/Slack", "is this still open", "reconcile my chases", or
-  "confirm before we publish" - and internally, whenever chase-in is about to
-  draft a nudge or radiate-out is about to draft a customer status. Dispatches
+  "confirm before we publish" - and internally, whenever chase-in, drift, or
+  panic is about to surface an item, radiate-out is about to draft a context
+  status, or the sweep verifies a candidate. Dispatches
   by promise.source.type to a per-source adapter (issues, crm, chat, email
   lighter; TaskNotes-derived promises reconcile against their underlying
   source ref). Read-only against every source and against TaskNotes; only the
@@ -41,6 +42,9 @@ Do not re-hit a source for every promise on every run. Before dispatching:
   than ~1 day old**, reuse the cached `verifyStatus`/`reason` - skip the
   adapter call entirely.
 - Otherwise run the adapter and refresh.
+- Within a single run, reuse a result already computed for an item this run
+  rather than calling the adapter again (e.g. when `panic` surfaces an item the
+  `drift` check already reconciled).
 
 **Persistence is backend-scoped:** for a promise whose record lives in the
 `state.json` backend, persist the refreshed `lastVerified` + `verifyStatus` +
@@ -56,25 +60,28 @@ is re-checked next time it matters. Deliberate v1 tradeoff, not an oversight.
   Otherwise -> `verified-open`, refresh `lastVerified`.
 - **`crm` (e.g. Salesforce):** the record's closed flag -> `resolved`. Owner/
   assignee changed -> `reassigned`. Otherwise -> `verified-open`.
-- **`chat` (e.g. Slack):** use `config.contacts` to find the right customer
-  channel/thread. Check clear signals only (defer deep NLP): did the user
-  reply after the ask? did someone else visibly take it over? is there an
-  explicit resolved/closed/done word? Otherwise -> `verified-open`.
+- **`chat` (e.g. Slack):** use `config.contacts` to find the right context's
+  channel/thread. Open the FULL thread - never trust a mention/keyword search
+  hit alone (a search can show a thread as unanswered when the user already
+  replied or acted). Check clear signals only (defer deep NLP): the user
+  replied/acted after the ask, or an explicit resolved/closed/done word ->
+  `resolved`; someone else visibly took it over -> `reassigned`; a named person
+  not on the context -> `mis-attributed`; otherwise -> `verified-open`.
 - **`email`:** lighter touch - the thread's latest message and whether the
   user has replied. Replied -> lean `resolved`/`verified-open` per context;
   otherwise -> `verified-open`.
 - **TaskNotes-derived promise:** its real source of truth is the underlying
-  system referenced IN the note (a Jira key, a customer channel) - not the
-  note itself. Extract that reference and dispatch to the matching adapter
-  above. No linkable reference -> `unverifiable`.
+  system referenced IN the note (a Jira key, a chat channel) - not the note
+  itself. Extract that reference and dispatch to the matching adapter above.
+  No linkable reference -> `unverifiable`.
 
 ## Mis-attribution check (uses config.contacts)
 
-For any promise with a named `owner`/person and a `context` (customer), check
-that the name appears in that customer's `contacts.people` list (schema in
+For any promise with a named `owner`/person and a `context`, check that the
+name appears in that context's `contacts.people` list (schema in
 `reference/reconciliation.md`). If it does not, the promise is
 `mis-attributed` regardless of what the adapter above would otherwise return -
-this catches a promise tagged to the wrong customer/person even when the
+this catches a promise tagged to the wrong context/person even when the
 source itself looks fine.
 
 ## Acting on results
@@ -89,8 +96,8 @@ source itself looks fine.
 - **`reassigned`** -> record the new owner (state.json backend only) with a
   history note; drop it from the user's chase list with a brief note
   explaining why. For TaskNotes, surface the same as an instruction, no write.
-- **`mis-attributed`** -> withhold from any customer-facing output; flag to
-  the user: "this names `<person>`, who isn't on `<customer>` - confirm."
+- **`mis-attributed`** -> withhold from any outward-facing output; flag to
+  the user: "this names `<person>`, who isn't on `<context>` - confirm."
 - **`unverifiable`** -> never chase or publish with confidence; surface as
   "can't verify - confirm manually."
 

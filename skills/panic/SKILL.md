@@ -3,12 +3,11 @@ name: panic
 description: >
   Regulate a spiral, not aggregate a report. Use when the user says things like
   "panic", "SOS", "I'm freaking out", "I'm spiraling", "what's on fire", "I
-  don't know where to start", or "I'm overwhelmed". Reads the ledger only
-  (same time-sensitive definition as chase-in) and never writes: shows the
-  most time-sensitive item(s) first, a drift check, the one item likely being
-  avoided, and one small next move. Ephemeral, renders in chat only, never
-  saved to state.json or the knowledge base. This is ADHDecoder's panic
-  button.
+  don't know where to start", or "I'm overwhelmed". Reads the ledger and
+  reconciles only the few items it surfaces (never the whole ledger), and
+  writes no promise data itself: shows the most time-sensitive item(s) first, a
+  drift check, the one item likely being avoided, and one small next move.
+  Ephemeral, renders in chat only. This is ADHDecoder's panic button.
 ---
 
 # Panic button (reactive)
@@ -20,15 +19,20 @@ they're looking at, not list everything at once. Read `reference/method.md`
 
 ## What this does / does not do
 
-- **Reads the ledger only.** Same load path as `chase-in`: locate `state.json`
-  via `config.json` -> `instancePath`, recompute `overdue` and `stakes` at read
-  time. No source sweeping, no connectors.
-- **Pure ephemeral.** Everything here renders in chat and nowhere else. Never
-  write to `state.json`, `Radar.md`, or any dashboard file.
-- **Read-only, always.** If the user wants to act mid-panic (mark something
-  met/cleared, log a new promise, clear a drift flag), hand the write off to
-  the `ledger` skill (or the `drift` skill for a drift clear). Never write
-  here.
+- **Reads the ledger; reconciles only what it surfaces.** Same load path as
+  `chase-in`, recomputing `overdue` and `stakes` at read time. It does not
+  sweep sources, but before showing an item it cross-checks that handful via
+  the `reconcile` skill (the top time-sensitive items + the one being avoided) -
+  never the whole ledger, to stay fast. Honors reconcile's TTL cache and reuses
+  the drift check's results.
+- **Pure ephemeral.** Everything here renders in chat and nowhere else. Panic
+  writes no promise data - not to `state.json`, `Radar.md`, or any dashboard
+  file; its only `state.json` touch is reconcile's own verify-metadata
+  bookkeeping during the pre-check, not a panic write.
+- **Draft-only for user actions.** If the user wants to act mid-panic (mark
+  something met/cleared, log a new promise, clear a drift flag), hand the write
+  off to the `ledger` skill (or the `drift` skill for a drift clear). Panic
+  itself logs nothing.
 - **De-escalate.** No wall of red, no urgency-shaming. Short, calm, specific.
 
 ## What to show, in this order
@@ -37,9 +41,9 @@ they're looking at, not list everything at once. Read `reference/method.md`
    surfaces (overdue at any stakes; due-today at any stakes; due-soon only if
    high-stakes), ranked most-overdue-and-highest-stakes first. Show the **top
    2-3**, not the full board - panic needs a short list, not a dump.
-2. **A drift check.** Invoke the `drift` skill's ledger-only check and fold its
-   output in as one or two short lines (e.g. "X hasn't visibly moved in N
-   days"). If drift finds nothing, say so briefly and move on.
+2. **A drift check.** Invoke the `drift` skill's check and fold its output in
+   as one or two short lines (e.g. "X hasn't visibly moved in N days"). If
+   drift finds nothing, say so briefly and move on.
 3. **"The one you're avoiding."** Approximate as the most time-sensitive
    **i-owe-them** item (something the user must DO - grunt work is what
    slips). Name it plainly. Note once, briefly, that this is an approximation
@@ -49,6 +53,13 @@ they're looking at, not list everything at once. Read `reference/method.md`
    nudge for it. If it's `i-owe-them` and not ready to finish, offer a
    one-line holding status instead ("I'll have `<what>` to you by `<date>`")
    rather than the whole deliverable.
+
+**Reconcile only what you show.** Cross-check just the items you are about to
+surface (item 1's top few, and item 3's avoided item) via the `reconcile`
+skill - never the whole ledger, so panic stays fast. Skip anything reconcile
+returns `resolved` / `reassigned` / `mis-attributed` and drop to the next
+candidate. Reuse the drift check's reconcile results (item 2) so nothing is
+verified twice. An `unverifiable` item may still show, marked "unconfirmed."
 
 Keep the whole thing short enough to read in one breath. If there is
 genuinely nothing time-sensitive open, say that plainly and stop - do not
@@ -61,5 +72,7 @@ manufacture urgency.
 - Never auto-create a task or promise. Logging anything new still goes
   through the `ledger` skill's reality gate (owner + what + expectBy, or the
   user confirms).
-- No flood. Top few items only, never the whole ledger.
-- No hidden files. Nothing is written by this skill, ever.
+- No flood. Top few items only, never the whole ledger - and reconcile only
+  those 2-3 shown items, to keep panic fast.
+- No hidden files. Panic writes no promise data; the reconcile pre-check's only
+  `state.json` touch is reconcile's own verify-metadata bookkeeping.
