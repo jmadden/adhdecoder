@@ -37,11 +37,11 @@ plus the minimum needed to track and dedup. Everything else it references via
 
 ```json
 {
-  "id": "ISSUE-123:login-redirect-url",
-  "title": "Login redirect URL fix",
+  "id": "ISSUE-123:login-redirect",
+  "title": "Login redirect fix",
   "context": "Acme Corp",
   "direction": "they-owe-me",
-  "what": "Eng confirms UAT login redirect returns 404 vs 403",
+  "what": "Eng confirms the staging login redirect returns 404 vs 403",
   "owner": "A. Contact (Acme)",
   "expectBy": "2026-07-28",
   "status": "pending",

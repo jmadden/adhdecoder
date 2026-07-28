@@ -3,7 +3,7 @@
 Build input. Drop into the plugin repo as `reference/adapter-tasknotes.md`.
 Written 2026-07-27. This is an OPTIONAL ledger backend, not core. The default
 backend stays `state.json`; this one is opt-in for a user who already keeps
-tasks as Markdown notes (the user's Obsidian TaskNotes).
+tasks as Markdown notes with YAML frontmatter (e.g. Obsidian TaskNotes).
 
 ## Purpose
 

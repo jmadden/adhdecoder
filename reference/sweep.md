@@ -40,9 +40,9 @@ the user (that is the "worked it partway then got distracted" failure).
 
 - **Verify before flagging.** A Slack/email ping is a CANDIDATE, not a stall.
   Cross-check the underlying issue/case status (or the thread's latest state)
-  before surfacing. Proof: ISSUE-124 looked like a hot stall in Slack (people
-  chasing "close this today") but was already Done in Jira. Never chase a closed
-  item.
+  before surfacing. Proof: an issue (ISSUE-123) looked like a hot stall in chat
+  (people chasing "close this today") but was already Done in the issue tracker.
+  Never chase a closed item.
 - **Email `is:unread` is noise.** It is full of automated senders (meal
   reminders, digests, calendar invites). The real signal is "the last message
   is from someone else, addressed to me, and I have not replied," with
@@ -52,11 +52,11 @@ the user (that is the "worked it partway then got distracted" failure).
 - **Hide raw feeds.** Link to the source; never paste raw thread/email content
   into the ledger.
 - **Always read the full thread; never trust a mention/keyword search alone.**
-  (Validated 2026-07-27: a concise mention search showed the one customer SSO
-  question and the another customer "we need Eng help" ping as unanswered, but opening the
-  threads showed the user had already replied and acted the same day. Both were
-  false alarms.) Before flagging, open the thread and check the user's OWN
-  latest activity in it.
+  (Validated 2026-07-27: a concise mention search showed one customer's SSO
+  question and another customer's "we need Eng help" ping as unanswered, but
+  opening the threads showed the user had already replied and acted the same
+  day. Both were false alarms.) Before flagging, open the thread and check the
+  user's OWN latest activity in it.
 - **Weekend / business-day-aware quiet windows.** Count business days, not
   calendar days. Fri -> Mon is ~1 business day, not 3. Do not call something
   stale across a weekend or a known OOO stretch.
