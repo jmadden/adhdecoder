@@ -59,8 +59,10 @@ Per context, compose a short "Where things stand" draft with three sections
 - **Recently shipped** - promises `met`/`cleared` in roughly the last 1-2
   weeks.
 
-One line per promise: the plain-language `what`, in a reassuring, plain tone,
-linking to its source. No internal ids, no raw ticket text.
+One line per promise: the plain-language `what`, in a reassuring, plain tone.
+**No internal links.** A customer draft omits `source.url` / `noteRef`
+(tracker / chat / internal-doc links); include a link only if it is explicitly
+customer-appropriate. No internal ids, no raw ticket text.
 
 **Batched: one review per context.** For the context currently being drafted,
 reconcile each of its open/recently-closed promises (right before drafting -
@@ -74,9 +76,11 @@ about to be published.
 
 Given "any update on X?" (a stakeholder or colleague asking about something
 already addressed): locate the most recent matching promise/status in the
-ledger for X, pull its source link and current state, and draft a **one-line
-re-point**: what was last said/done, plus the source link, in the same plain
-tone as Mode 1. This turns "let me dig that up" into a ready-to-send line.
+ledger for X (using its `source.url` yourself to find it) and draft a
+**one-line re-point**: what was last said/done, in the same plain tone as
+Mode 1. Do NOT paste the internal `source.url` into the customer-facing line -
+the link is for you to locate the item, not for the draft (see the hard rule
+below).
 
 If the located status fails the verified-only gate (below), do not draft a
 confident re-point - draft a brief "let me confirm and get right back to you"
@@ -128,4 +132,8 @@ itself.
   sending," never silently included.
 - No flood - one context's draft at a time in Mode 1.
 - Plain tone - no jargon, ticket-speak, or blame in anything outward-facing.
+- **Never put an internal link (tracker / chat / internal doc) in
+  customer-facing copy.** Omit `source.url` / `noteRef`, or use only a link
+  that is explicitly customer-appropriate. An internal Jira/Slack link must
+  never land in a customer draft.
 - No hidden files. Reads the ledger backend; writes nothing outward itself.

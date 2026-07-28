@@ -47,11 +47,19 @@ Do not re-hit a source for every promise on every run. Before dispatching:
   `drift` check already reconciled).
 
 **Persistence is backend-scoped:** persist the refreshed `lastVerified` +
-`verifyStatus` + `verifyReason` via the `ledger` skill's **Record reconcile
-result** operation. For a `state.json`-backed promise these live on the record;
-for a TaskNotes-derived promise they go to the `state.json` `itemMeta`
-companion keyed by the item id (never the note). Either way the result is
-cached against the TTL above.
+`verifyStatus` + `verifyReason` (and any upgraded `source`, see below) via the
+`ledger` skill's **Record reconcile result** operation. For a
+`state.json`-backed promise these live on the record; for a TaskNotes-derived
+promise they go to the `state.json` `itemMeta` companion keyed by the item id
+(never the note). Either way the result is cached against the TTL above.
+
+**Write the discovered source link back.** When an adapter locates or confirms
+the live source (the ticket, the chat permalink, the sent email/thread, the CRM
+record), return its canonical URL and write it onto the promise's `source`,
+upgrading a note-only link and clearing `noteOnly`. Same persistence split:
+builtin -> the record; TaskNotes -> `itemMeta[<id>].source` (never the note, so
+read-only holds). This keeps the real link that reconcile found instead of
+discarding it.
 
 ## Per-source adapters
 

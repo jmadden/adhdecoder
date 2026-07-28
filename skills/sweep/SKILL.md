@@ -115,6 +115,10 @@ Update operation with `direction`, a concrete `what`, a named `owner`, an
 `expectBy`, `source` ({ type, ref, url }), and `lastVerified`. `stakes` is
 computed by the ledger at read time; do not hand-set it.
 
+Set `source.url` to the swept item's **canonical permalink** - the issue URL,
+the chat permalink (from channel id + message ts), the email thread, or the CRM
+record URL - never a paraphrase or a search query. Link, never paste.
+
 Reality gate: only write with owner + concrete `what` + `expectBy`. When the
 source implies a date (SLA/priority tier, a go-live, a due field) use it and
 note in `history` that it is an estimate to confirm. If owner, `what`, or a

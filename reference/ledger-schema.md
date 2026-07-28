@@ -28,10 +28,11 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **knownChannels** — `{ id, name, customer }` for chat channels to back-stop.
 - **dismissedFromBoard** — ids the user killed off the board; never re-surface.
 - **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, verifyStatus,
-  verifyReason, lastVerified } }`. Overlay store for items whose canonical
-  record is read-only (the TaskNotes backend). Builtin promises keep these on
-  the record; the companion is never written into a note. The Query overlays it
-  at read time.
+  verifyReason, lastVerified, source, noteOnly } }`. Overlay store for items
+  whose canonical record is read-only (the TaskNotes backend), incl. a
+  reconcile-enriched `source` (and `noteOnly` cleared) for such a note. Builtin
+  promises keep these on the record; the companion is never written into a
+  note. The Query overlays it at read time.
 
 ## Promise record
 
@@ -48,6 +49,8 @@ plus the minimum needed to track and dedup. Everything else it references via
   "stakes": "high",
   "stakesOverride": null,
   "source": { "type": "issues", "ref": "ISSUE-123", "url": "https://..." },
+  "noteRef": null,
+  "noteOnly": false,
   "created": "2026-07-24T11:05:00-07:00",
   "lastVerified": "2026-07-24T11:05:00-07:00",
   "verifyStatus": null,
@@ -76,7 +79,14 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **stakes** — `high` | `normal`, auto-computed (see method.md). Recompute each
   read; do not hand-edit.
 - **stakesOverride** — `high` | `low` | null. User escape hatch. Wins over auto.
-- **source** — `{ type, ref, url }`. Link, never paste raw content.
+- **source** — `{ type, ref, url }`, the best ACTIONABLE source: prefer the
+  underlying ticket / chat permalink / email over a note link. Link, never
+  paste raw content.
+- **noteRef** — optional `{ url }` to the backing note (e.g. an `obsidian://`
+  link), so the record is one click away. Distinct from `source`; null when
+  there is no backing note.
+- **noteOnly** — bool (default false). True when no actionable source was found
+  and `source` is itself the note link.
 - **lastVerified** — ISO 8601, when a source last confirmed this promise.
 - **verifyStatus** — `verified-open` | `resolved` | `reassigned` |
   `mis-attributed` | `unverifiable` | `null` (not yet reconciled). Set only by

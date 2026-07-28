@@ -40,7 +40,9 @@ they're looking at, not list everything at once. Read `reference/method.md`
 1. **Most time-sensitive first.** Use the same "time-sensitive" set `chase-in`
    surfaces (overdue at any stakes; due-today at any stakes; due-soon only if
    high-stakes), ranked most-overdue-and-highest-stakes first. Show the **top
-   2-3**, not the full board - panic needs a short list, not a dump.
+   2-3**, not the full board - panic needs a short list, not a dump. Each shown
+   item includes its clickable `source.url` (panic renders to the user in chat,
+   an internal surface, so the real link is fine here).
 2. **A drift check.** Invoke the `drift` skill's check and fold its output in
    as one or two short lines (e.g. "X hasn't visibly moved in N days"). If
    drift finds nothing, say so briefly and move on.

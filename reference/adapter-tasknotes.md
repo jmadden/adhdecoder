@@ -76,6 +76,16 @@ read-only note - `snoozedUntil`, a `deadlineType` override, `why`, and verify
 metadata - live in the `state.json` `itemMeta` companion keyed by the note's item
 id, NEVER written into the note. The Query overlays them at read time.
 
+**Source links (fix, 2026-07-28).** The `source` row above is superseded: do
+not default `source` to the `obsidian://` note link. Instead EXTRACT the
+underlying actionable ref from the note (an issue key -> tracker URL; a chat
+permalink; an email/thread id; a doc/wiki URL; a CRM case number -> its
+canonical URL) and set `source` to the most relevant, with `noteRef` = the
+`obsidian://` note link. If none is found, `source` falls back to the note link
+with `noteOnly: true`. A reconcile-discovered source link is persisted to the
+`itemMeta` companion (never the note) and overlaid at read time. See
+`reference/source-links.md`.
+
 ## Never (hard, read-only)
 
 - Never write, create, rename, move, or modify any TaskNote or Radar file.

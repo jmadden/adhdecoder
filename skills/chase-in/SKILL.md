@@ -138,7 +138,9 @@ Present a scannable board, not a feed:
 3. Within each: aging first, then overdue, then due-today, then due-soon.
    High-stakes flagged.
 4. Per item, one line of facts: `what` - `owner` - `expectBy` (+ days over/until) -
-   state - source link, then its drafted nudge.
+   state - a clickable `source.url` (the actionable source; if `noteOnly`, the
+   note link with a small "(note)" hint), optionally `noteRef` too, then its
+   drafted nudge.
 
 Eat the grunt: the user's only job is to read the top item, approve a draft, and
 send.

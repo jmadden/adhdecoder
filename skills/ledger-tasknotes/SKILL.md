@@ -57,8 +57,17 @@ Per the field table in `reference/adapter-tasknotes.md`:
 | `deadlineType` | real `due` present -> `hard`; `ongoing` tag (or `scheduled` without `due`) -> `soft`; else default `hard`. An `itemMeta` override wins. |
 | `why` | a note `why`/`why:` field if present, else the `itemMeta` overlay, else null |
 | `lastVerified` | `dateModified` (or the `itemMeta` verify timestamp if newer) |
-| `source` | an `obsidian://` link to the file |
+| `source` | the best ACTIONABLE ref extracted from the note (see below), else the note link with `noteOnly: true`. An `itemMeta` reconcile-enriched source wins. |
+| `noteRef` | `{ url }` = the `obsidian://` link to the note itself |
+| `noteOnly` | `true` only when no actionable ref was found and `source` fell back to the note link |
 | `history` | the body's `update <ISO> - ...` lines, read verbatim (never modified) |
+
+**Extract the actionable source** from the note's frontmatter/body, most
+relevant wins: an issue key (e.g. an `ISSUE-123` pattern) -> the tracker issue
+URL; a chat permalink / archive URL in the body; an email/thread id; a doc/wiki
+URL; a CRM case number -> its canonical URL. Set `source` to that and `noteRef`
+to the `obsidian://` note link. If none is found, `source` = the note link and
+`noteOnly: true`. Link, never paste the note body.
 
 Same verify spirit as the sweep: `status: done` is closed - never chase it.
 
@@ -67,9 +76,10 @@ Same verify spirit as the sweep: `status: done` is closed - never chase it.
 A TaskNote is read-only, so ADHDecoder-owned overlay fields live in the
 `state.json` `itemMeta` companion keyed by the note's item id, NEVER in the
 note. At read time, overlay `itemMeta[<id>]` onto the derived promise:
-`snoozedUntil`, a `deadlineType` override, and verify metadata
-(`verifyStatus`/`verifyReason`/`lastVerified`). This is what lets snooze,
-mark-ongoing, and reconcile results persist for a note the plugin will not
+`snoozedUntil`, a `deadlineType` override, verify metadata
+(`verifyStatus`/`verifyReason`/`lastVerified`), and a reconcile-enriched
+`source` (with `noteOnly` cleared). This is what lets snooze, mark-ongoing, and
+reconcile's discovered source link persist for a note the plugin will not
 touch.
 
 ## Query (the read contract chase-in / drift / panic call)

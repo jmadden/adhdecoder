@@ -63,19 +63,22 @@ via **Add a promise** instead.
 
 **Record reconcile result.** Called by the `reconcile` skill after it
 cross-checks a promise's live source. Set `verifyStatus`, `verifyReason`, and
-refresh `lastVerified` to now. Builtin -> write these on the record, append one
-`history` line with the reason, and if `verifyStatus` is `resolved` also set
-`status: met` (bookkeeping, not a customer-facing action - the same spirit as
-`sweep`'s silent enrich). TaskNotes-derived -> write the verify metadata to
-`itemMeta[<id>]` (never the note), and surface `resolved` as a "looks done,
-close it?" draft rather than auto-marking met.
+refresh `lastVerified` to now; and when reconcile located a better live source
+link, upgrade `source` to it and clear `noteOnly`. Builtin -> write these on the
+record, append one `history` line with the reason, and if `verifyStatus` is
+`resolved` also set `status: met` (bookkeeping, not a customer-facing action -
+the same spirit as `sweep`'s silent enrich). TaskNotes-derived -> write the
+verify metadata AND the upgraded `source` to `itemMeta[<id>]` (never the note),
+and surface `resolved` as a "looks done, close it?" draft rather than
+auto-marking met.
 
 **Query.** If the active backend is `tasknotes`, obtain the promise set from
 the `ledger-tasknotes` adapter (the union of open TaskNotes + builtin
 `state.json`), then apply the grouping/sorting/recompute below unchanged.
 Otherwise read `state.json`. For TaskNotes-derived promises, overlay
-`itemMeta[<id>]` (`snoozedUntil`, `deadlineType`, verify metadata) onto the
-record at read time. Recompute `overdue` (expectBy < today, not met, AND
+`itemMeta[<id>]` (`snoozedUntil`, `deadlineType`, verify metadata, and a
+reconcile-enriched `source`/`noteOnly`) onto the record at read time. Recompute
+`overdue` (expectBy < today, not met, AND
 `deadlineType` is `hard` - `soft`/`none` are never overdue) and `stakes` at read
 time. Expose `snoozedUntil` on each promise so consumers can skip snoozed items.
 Then present, grouped and sorted:

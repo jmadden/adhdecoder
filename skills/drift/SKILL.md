@@ -74,7 +74,8 @@ All of:
 4. Days since `lastVerified` is 3 or more - nothing has touched or confirmed
    it in that window while it is due or overdue.
 
-Present as: `<what>` (`<owner>`) hasn't visibly moved in `<N>` days.
+Present as: `<what>` (`<owner>`) hasn't visibly moved in `<N>` days - `<source.url>`
+(a "(note)" hint if `noteOnly`).
 
 ### No-due staleness fallback (any backend)
 
@@ -92,7 +93,8 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 4. Surface when: (`status` is `blocked` OR `stakes` is `high`) AND business
    days >= ~2, **or** any open item AND business days >= ~15.
 
-Present as: `<what>` (`<owner>`) hasn't moved in `<N>` business days. Same
+Present as: `<what>` (`<owner>`) hasn't moved in `<N>` business days -
+`<source.url>` (a "(note)" hint if `noteOnly`). Same
 observational tone, never "you're behind" or similar - the absence of a date
 is not the user's fault, it just means date-based checks can't see it, so this
 fallback exists specifically to make it visible.
