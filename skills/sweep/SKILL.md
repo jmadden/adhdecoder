@@ -52,22 +52,60 @@ ADHD design principles"), and `reference/ledger-schema.md` before running.
 ## Find candidates (per source, generic)
 
 Ask each enabled source the same question: **items pointed at me, changed since
-lastSwept, still open.** Category patterns (exact mechanics live in each source
-adapter, not here):
+lastSwept, still open.** The per-source techniques below are ported from a
+proven prior decoder; full detail and rationale in `reference/parity-port.md`.
+Every specific (handle, channel list, watched accounts, timezone, noise pattern)
+reads from `config.identity` / `config.sources[]` / `config.contacts` /
+`state.json` - never hard-coded here.
 
-- **`~~chat`:** threads the user engaged in that went quiet after their last
-  message; unanswered @mentions/pings; DMs awaiting reply. A mention/keyword
-  search surfaces candidates but is not evidence by itself - back it with the
-  `knownChannels` registry in the ledger, and always open the full thread (see
-  Verify before flagging).
+- **`~~chat` (three passes every run - search alone silently misses real
+  messages):**
+  1. **Mention-token search** for the user's handle
+     (`config.identity.handles.chat`) over `lastSwept - overlap` to now (a few
+     hours of overlap absorbs search-index lag), plus a `to:`/recipient pass for
+     DMs.
+  2. **Known-channel backstop.** Read `state.json.knownChannels` directly each
+     run and scan each since `lastSwept` for the user's mentions, regardless of
+     what search returned. Add a channel on its first hit; never remove it. This
+     is the safety net for "search returned empty but a real mention exists."
+  3. **Silent-reply tracking.** Re-read `state.json.watchedThreads`
+     (channel + parent ts) and surface new replies since `lastSwept` even when
+     they never re-mention the user.
+  On any hit, read the **full thread** before deciding (prior messages carry the
+  substance). Maintain both registries in `state.json` as you go.
 - **`~~email`:** threads addressed to the user awaiting their reply. The signal
   is "last message is from someone else, to me, and I have not replied" -
   filter automated / no-reply senders. Do **not** rely on unread.
-- **`~~issue tracker`:** open issues the user is involved in (assignee,
-  reporter, commenter, watcher, or an external-dependency-on-user field) that
-  have gone quiet; pull priority + status.
-- **`~~crm` / `~~docs` / `~~calls`:** as configured; lower priority for most
-  users.
+- **`~~issue tracker`:** buckets - **assignee**, **comment-mentions**,
+  **watcher** (with new activity). **Timezone-correct filtering:** convert the
+  since-cutoff to the tracker's tz (`config.sources[].tz`) or filter by each
+  issue's own `updated` offset; never trust a naive datetime. **Sync-noise:** a
+  recurring bulk bump (`config.sources[].noise`) is not real activity. **Priority
+  persistence:** an item at/above the configured high-priority threshold that is
+  assigned / mentions / watched stays flagged until it is **closed or
+  reassigned** - a quiet high-priority item is not resolved, never drop it for
+  "no new comment."
+- **`~~crm`:** open records on the user's **watched accounts**
+  (`config.contacts`) AND records the user owns or follows. **Severity / SLA at
+  or above the configured tiers on a watched account always flags.** A "blocked
+  on our team" internal-dependency value is an **action item, not FYI**. Treat
+  CRM datetimes in its own tz (often UTC). If a record links a tracker issue, it
+  is the **same** work item - decode once, cross-reference both ids.
+- **`~~calendar`:** query the calendar **directly** for events changed since
+  `lastSwept` (self-created / self-organized events leave no email trail, so
+  email alone misses them). Decode **substantive** changes only - new event,
+  time/date change, attendee add/drop, real agenda edit; **skip pure RSVP**
+  changes.
+- **`~~calls` (call-intelligence + meeting-notes):** only meetings the user
+  actually **attended** (confirm attendance, do not trust an org-wide feed);
+  extract **user-owned** action items. **Dedup across both** - one meeting can
+  produce a call record AND a notes doc; decode once, prefer the **richer**
+  source, cross-reference the other. Treat auto-generated notes as **lossy**:
+  match names loosely, use only as last-resort corroboration, never as the lead
+  (they mislabel owners and bury direct mentions).
+- **`~~docs`:** mentions of the user in comments, and **others'** edits/comments
+  on pages the user authored. **Never surface the user's own edits** back at
+  them.
 
 A ping is a **candidate, not a stall.**
 
@@ -106,12 +144,16 @@ reconciled within ~1 day reuses that result instead of re-hitting the source
 for chat now lives in reconcile's chat adapter, so the same care applies without
 being duplicated here.
 
-## Dedup against the ledger
+## Context enrichment before creating (dedup)
 
-Read the ledger backend first. If a candidate matches an existing promise (same
-source ref or clear overlap, or an id in `dedup.seen`), **enrich/update** it -
-refresh `lastVerified`, append a `history` note, adjust `expectBy` if the source
-moved it - never create a second record. Add newly-decoded ids to `dedup.seen`.
+Read the ledger backend first. Before recording a candidate as a NEW promise,
+match it against existing promises **by source ref/key OR by context + topic**
+(not just an exact id), and also against `dedup.seen`. If it matches,
+**enrich/attach** - refresh `lastVerified`, append a `history` note, adjust
+`expectBy` if the source moved it - never create a second record. Decode as new
+**only if it maps to nothing**. Add newly-decoded ids to `dedup.seen`. A CRM
+record and its linked tracker issue, or a meeting's call record and notes doc,
+are one work item - attach, do not duplicate.
 
 ## Write through the ledger (reality gate applies)
 

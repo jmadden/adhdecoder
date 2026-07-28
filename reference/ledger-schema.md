@@ -16,6 +16,7 @@ plus the minimum needed to track and dedup. Everything else it references via
   "promises": [],
   "dedup": { "seen": [] },
   "knownChannels": [],
+  "watchedThreads": [],
   "dismissedFromBoard": [],
   "itemMeta": {}
 }
@@ -25,7 +26,14 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **lastSwept** — ISO 8601 of the last successful sweep, or null.
 - **promises** — the ledger proper (array of promise records below).
 - **dedup.seen** — ids of items already decoded, so nothing is re-decoded.
-- **knownChannels** — `{ id, name, customer }` for chat channels to back-stop.
+- **knownChannels** — `{ id, name, customer }` for chat channels the sweep reads
+  directly as a backstop. **Self-expanding:** add a channel the first time it
+  produces a hit; never remove it. The safety net for "chat search returned
+  empty but a real mention exists" (see `reference/parity-port.md`).
+- **watchedThreads** — `{ channel, ts }` for threads the user has posted in
+  (parent message ts). The sweep re-reads these each run and surfaces new
+  replies since `lastSwept` even when they never re-mention the user
+  (silent-reply tracking). Self-expanding, same discipline as `knownChannels`.
 - **dismissedFromBoard** — ids the user killed off the board; never re-surface.
 - **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, verifyStatus,
   verifyReason, lastVerified, source, noteOnly } }`. Overlay store for items

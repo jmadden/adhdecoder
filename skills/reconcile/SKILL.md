@@ -65,9 +65,14 @@ discarding it.
 
 - **`issues` (e.g. Jira):** fetch the issue. Done/closed -> `resolved`.
   Assignee moved off the user, and it is not the user's to own -> `reassigned`.
-  Otherwise -> `verified-open`, refresh `lastVerified`.
+  Otherwise -> `verified-open`, refresh `lastVerified`. **Priority persistence:**
+  a high-priority item is `resolved` only when actually closed or reassigned -
+  never mark it resolved just because it has gone quiet (a quiet high-priority
+  item is still open; see `reference/parity-port.md`).
 - **`crm` (e.g. Salesforce):** the record's closed flag -> `resolved`. Owner/
-  assignee changed -> `reassigned`. Otherwise -> `verified-open`.
+  assignee changed -> `reassigned`. Otherwise -> `verified-open`. If the record
+  links a tracker issue, it is the **same** work item - reconcile against that
+  issue too and cross-reference both ids rather than treating them separately.
 - **`chat` (e.g. Slack):** use `config.contacts` to find the right context's
   channel/thread. Open the FULL thread - never trust a mention/keyword search
   hit alone (a search can show a thread as unanswered when the user already
@@ -78,12 +83,28 @@ discarding it.
 - **`email`:** lighter touch - the thread's latest message and whether the
   user has replied. Replied -> lean `resolved`/`verified-open` per context;
   otherwise -> `verified-open`.
+- **`calendar`:** the event still exists and is not cancelled -> `verified-open`;
+  cancelled/past-and-done -> `resolved`. A pure RSVP change is not a resolution.
+- **`docs`:** the page/comment still open and awaiting the user -> `verified-open`;
+  the user (or someone) resolved the comment / addressed the edit -> `resolved`.
+- **`calls`:** the action item still open -> `verified-open`; visibly done or
+  owned by someone else -> `resolved`/`reassigned`. Auto-generated notes are
+  **last-resort** corroboration (lossy owner labels) - do not resolve on notes
+  alone; prefer the richer source.
 - **TaskNotes-derived promise:** its real source of truth is the underlying
   system referenced IN the note (a Jira key, a chat channel) - not the note
   itself. Extract that reference and dispatch to the matching adapter above.
   No linkable reference -> `unverifiable`.
 
-## Delivery detection (email + chat adapters)
+## Research order (when an item spans sources)
+
+When a single item could be checked in more than one source, research in the
+configured **source-weight** order (high first), and lead with the source that
+actually **assigns ownership** (issue tracker / CRM record / the chat thread
+where it was handed off) - that is the source of truth for who owes what.
+Auto-generated meeting notes are **last-resort corroboration only**, never the
+lead: they mislabel owners and bury direct mentions. See
+`reference/parity-port.md`.
 
 Beyond confirming a promise is still open, the **email** and **chat** adapters
 also watch for the user having **delivered** the deliverable or handed the

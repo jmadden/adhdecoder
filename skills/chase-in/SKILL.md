@@ -119,6 +119,18 @@ Each slipping promise carries **one** small, specific, ready-to-send draft:
 
 Keep each draft to one deliverable and one ask (One move). Never auto-send.
 
+**Nudge judgment** (see `reference/parity-port.md`):
+
+- **Internal teammate vs counterparty.** A nudge to an internal teammate is a
+  collaborative sanity-check ("does that sound right?"), not a deadline-y chase;
+  keep the firm, dated tone for the external counterparty who owes the thing.
+- **Don't chase the wrong side.** Distinguish the internal team from the
+  counterparty; the reality gate (named owner + concrete ask + date) decides who
+  is actually chaseable.
+- **Route technical work to its owner.** For real technical build work, address
+  the owner and include a worked example / concrete artifact; never make the
+  user guess technical details to fill in.
+
 When a promise carries a `why`, use it in the nudge to make the stakes concrete
 ("...so we can `<why>`").
 

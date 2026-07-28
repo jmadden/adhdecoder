@@ -4,5 +4,7 @@
   "promises": [],
   "dedup": { "seen": [] },
   "knownChannels": [],
-  "dismissedFromBoard": []
+  "watchedThreads": [],
+  "dismissedFromBoard": [],
+  "itemMeta": {}
 }

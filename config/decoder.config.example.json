@@ -35,7 +35,7 @@
 
   "contacts": {},
 
-  "_sources_comment": "weight (high|medium|low, default medium) sets sweep order/depth and is a tiebreak in surfacing; cadence (every-run|daily|hourly, default every-run) sets how often. See reference/scheduling.md. Tune per source, e.g. chat high/every-run, issues low/daily.",
+  "_sources_comment": "weight (high|medium|low, default medium) sets sweep order/depth and is a tiebreak in surfacing; cadence (every-run|daily|hourly, default every-run) sets how often. See reference/scheduling.md. Tune per source, e.g. chat high/every-run, issues low/daily. Optional per-source keys (see reference/parity-port.md): tz (the source's own timezone for correct since-cutoff filtering, e.g. issues/crm) and noise (a known recurring bulk-sync/no-activity pattern to ignore, e.g. a nightly bump time).",
   "sources": [
     { "type": "issues",   "enabled": false, "category": "~~issue tracker", "weight": "medium", "cadence": "every-run" },
     { "type": "chat",     "enabled": false, "category": "~~chat",          "weight": "medium", "cadence": "every-run" },
