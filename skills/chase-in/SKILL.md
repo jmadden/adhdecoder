@@ -91,9 +91,16 @@ cross-check - it never queries Jira/Slack/email/CRM directly; `reconcile`
 owns that, per source category, and caches results (~1/day TTL) so this stays
 cheap.
 
+**Verified before surfaced (hard bar).** A candidate whose `verifyStatus` is
+`null` (never reconciled) or whose `lastVerified` is past the TTL must be
+reconciled before it can appear - never chase off a stale or unverified record.
+If it comes back `unverifiable`, it surfaces marked **"unverified, confirm"**
+with the reason, never as a confident nudge. See
+`reference/verification-discipline.md`.
+
 - **`verified-open`** -> proceed to Draft the nudge below, as normal.
 - **`resolved`** -> drop from the board; it is done. For a `state.json`-backed
-  promise `reconcile` auto-marks it met. For a TaskNotes-derived promise,
+  promise `reconcile` auto-marks it met. For a read-only-backend promise,
   surface its "looks done, close it?" draft instead of a nudge.
 - **`reassigned`** -> drop from the board with a brief note ("reassigned to
   `<new owner>`, removed from your list").
@@ -152,9 +159,12 @@ Present a scannable board, not a feed:
    items - ranking is stakes > time > weight, so a low-weight source's genuine
    emergency still surfaces at the top (see `reference/scheduling.md`).
 4. Per item, one line of facts: `what` - `owner` - `expectBy` (+ days over/until) -
-   state - a clickable `source.url` (the actionable source; if `noteOnly`, the
-   note link with a small "(note)" hint), optionally `noteRef` too, then its
-   drafted nudge.
+   state - its `verifyStatus` (a short tag, e.g. `✓ verified-open`, or the
+   `verifyReason` when it adds signal) - a clickable `source.url` (the actionable
+   source; if `noteOnly`, the note link with a small "(note)" hint), optionally
+   `noteRef` too. For a note-backed item, add the note's current status + latest
+   update line. Then its drafted nudge. An item marked "unverified, confirm"
+   shows the confirm prompt in place of a confident nudge.
 
 Eat the grunt: the user's only job is to read the top item, approve a draft, and
 send.

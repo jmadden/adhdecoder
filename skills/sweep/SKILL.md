@@ -174,9 +174,13 @@ candidate for the user to confirm.
 
 ## Finish
 
-Record the sweep timestamp as `lastSwept` (through the ledger backend). The
-resulting promises feed `chase-in`, `drift`, and `panic`; sweep itself surfaces
-nothing to any customer-facing surface and sends nothing.
+Record the sweep timestamp as `lastSwept` (through the ledger backend). Report
+the **pre-sweep freshness** - how stale the ledger was before this run (the age
+of the previous `lastSwept`) - so a caller can lead with "what changed since the
+last sweep" (see `reference/verification-discipline.md`, Rule 3, and
+`daily-run`'s session-start refresh). The resulting promises feed `chase-in`,
+`drift`, and `panic`; sweep itself surfaces nothing to any customer-facing
+surface and sends nothing.
 
 ## Guardrails
 

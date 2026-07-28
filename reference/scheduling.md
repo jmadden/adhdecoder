@@ -75,7 +75,7 @@ that sweep only `every-run` / high-weight sources.
 
 ## Guardrails
 
-- Read-only against TaskNotes and sources; only `state.json` and the board file
+- Read-only against read-only backends and sources; only `state.json` and the board file
   get writes. Never auto-send / auto-post / auto-create tasks elsewhere.
 - Weight is secondary to urgency; every enabled source swept >= once/day.
 - Board file is a generated view (link, never paste raw feeds). No hidden files.

@@ -7,7 +7,7 @@ description: >
   drift check, or as a quiet passive flag on a sweep. Detects staleness from
   the ledger (days since lastVerified + overdue/due-soon-high-stakes for dated
   promises, plus a business-day fallback for OPEN promises with no expectBy,
-  common on real TaskNotes data), then reconciles each surfaced candidate
+  common on real note-backed data), then reconciles each surfaced candidate
   against its live source so it never flags a resolved, reassigned, or
   mis-tagged item. Offers a one-tap "handled offline" clear. Never writes
   directly; the clear routes through the `ledger` skill, the source cross-check
@@ -74,8 +74,9 @@ All of:
 4. Days since `lastVerified` is 3 or more - nothing has touched or confirmed
    it in that window while it is due or overdue.
 
-Present as: `<what>` (`<owner>`) hasn't visibly moved in `<N>` days - `<source.url>`
-(a "(note)" hint if `noteOnly`).
+Present as: `<what>` (`<owner>`) hasn't visibly moved in `<N>` days -
+`<verifyStatus>` - `<source.url>` (a "(note)" hint if `noteOnly`; for a
+note-backed item, add the note's current status + latest update line).
 
 ### No-due staleness fallback (any backend)
 
@@ -88,18 +89,19 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 2. `driftClearedUntil` is null or in the past, the id is not in
    `dismissedFromBoard`, and `snoozedUntil` is null or in the past.
 3. Compute days since `lastVerified` in **business days** (exclude weekends;
-   a backend adapter supplies `lastVerified` - e.g. the TaskNotes adapter uses
+   a backend adapter supplies `lastVerified` - e.g. the note-backed adapter uses
    `dateModified` - this skill does the business-day math).
 4. Surface when: (`status` is `blocked` OR `stakes` is `high`) AND business
    days >= ~2, **or** any open item AND business days >= ~15.
 
 Present as: `<what>` (`<owner>`) hasn't moved in `<N>` business days -
-`<source.url>` (a "(note)" hint if `noteOnly`). Same
+`<verifyStatus>` - `<source.url>` (a "(note)" hint if `noteOnly`; for a
+note-backed item, add the note's current status + latest update line). Same
 observational tone, never "you're behind" or similar - the absence of a date
 is not the user's fault, it just means date-based checks can't see it, so this
 fallback exists specifically to make it visible.
 
-This fallback is generic across backends, not TaskNotes-specific: any backend
+This fallback is generic across backends, not backend-specific: any backend
 that supplies `lastVerified` gets it for free.
 
 ## Reconcile pre-check (before surfacing)
@@ -110,9 +112,16 @@ whole ledger. Honor reconcile's TTL cache (an item verified within ~1 day
 reuses its cached result; a result already produced earlier this run - e.g. by
 a `panic` that also calls drift - is reused, not re-fetched).
 
+**Verified before surfaced (hard bar).** A candidate whose `verifyStatus` is
+`null` or whose `lastVerified` is past the TTL must be reconciled before it can
+appear - a drift flag is a claim about reality and must rest on a fresh verdict.
+Show the `verifyStatus` inline on the flag (below); anything `unverifiable` shows
+under "confirm," never as a settled drift fact. See
+`reference/verification-discipline.md`.
+
 - **`verified-open`** -> surface as a drift flag, as computed.
 - **`resolved`** -> drop it; it is done, not drifting. For a `state.json`
-  promise `reconcile` marks it met; for TaskNotes it surfaces a "looks done,
+  promise `reconcile` marks it met; for a read-only backend it surfaces a "looks done,
   close it?" draft.
 - **`reassigned`** -> drop it; it left the user's plate.
 - **`mis-attributed`** -> do not present as a plain drift item; surface it
@@ -144,7 +153,7 @@ auto-clear a flag.
 - No hidden files. This skill writes nothing; all writes route through the
   `ledger` skill.
 - Source cross-check runs through `reconcile` (read-only against sources and
-  TaskNotes); drift writes nothing itself, and any verify-metadata refresh is
+  read-only backends); drift writes nothing itself, and any verify-metadata refresh is
   reconcile's own `state.json` bookkeeping.
 - Advisor by default: report what looks stalled, let the user say what
   actually happened.

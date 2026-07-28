@@ -17,9 +17,7 @@ record shape before writing.
 ## Locate state
 
 0. **Select backend.** Read `config.ledger.backend` (default `builtin`). If
-   `builtin`, use `state.json` as below. If `tasknotes`, read/Query are served
-   by the read-only `ledger-tasknotes` adapter (`skills/ledger-tasknotes`, spec
-   in `reference/adapter-tasknotes.md`); writes stay on the builtin `state.json`
+   `builtin`, use `state.json` as below. If a read-only backend adapter is configured, read/Query are served by that adapter; writes stay on the builtin `state.json`
    companion in v1.
 1. Read the instance `config.json` (its path is the configured `instancePath`,
    or ask the user once and remember it).
@@ -44,12 +42,12 @@ with one "Promise captured." line, then write.
 
 **Set snooze.** Set `snoozedUntil` to a date (temporary per-item dismiss). The
 record is **kept, never deleted** - this is distinct from `dismissedFromBoard`
-(permanent). Append a history line. Builtin -> write it on the record; TaskNotes
+(permanent). Append a history line. Builtin -> write it on the record; a read-only backend
 -> write it to `itemMeta[<id>]`, never the note. "Unsnooze" clears it the same
 way.
 
 **Mark ongoing (set deadlineType).** Set `deadlineType` to `soft`/`none` (ongoing,
-no date-chasing) or back to `hard`. Builtin -> on the record; TaskNotes ->
+no date-chasing) or back to `hard`. Builtin -> on the record; a read-only backend ->
 `itemMeta[<id>]` override, never the note.
 
 **Flip direction on delivery (builtin).** When the user has delivered the thing
@@ -57,7 +55,7 @@ no date-chasing) or back to `hard`. Builtin -> on the record; TaskNotes ->
 they-owe follow-up: set `direction: they-owe-me`, `owner` = the recipients,
 `what` = "confirm/complete <the action>", `expectBy` = a confirm-by date, `why` =
 what it unblocks; append a history line ("delivered; now awaiting confirmation").
-Reality gate still applies. For a **TaskNotes** promise, never rewrite the note -
+Reality gate still applies. For a **read-only-backend** promise, never rewrite the source record -
 `reconcile` proposes a note-update draft and registers a new they-owe follow-up
 via **Add a promise** instead.
 
@@ -67,15 +65,14 @@ refresh `lastVerified` to now; and when reconcile located a better live source
 link, upgrade `source` to it and clear `noteOnly`. Builtin -> write these on the
 record, append one `history` line with the reason, and if `verifyStatus` is
 `resolved` also set `status: met` (bookkeeping, not a customer-facing action -
-the same spirit as `sweep`'s silent enrich). TaskNotes-derived -> write the
+the same spirit as `sweep`'s silent enrich). read-only-backend -> write the
 verify metadata AND the upgraded `source` to `itemMeta[<id>]` (never the note),
 and surface `resolved` as a "looks done, close it?" draft rather than
 auto-marking met.
 
-**Query.** If the active backend is `tasknotes`, obtain the promise set from
-the `ledger-tasknotes` adapter (the union of open TaskNotes + builtin
+**Query.** If a read-only backend adapter is active, obtain the promise set from that adapter (the union of its open records + builtin
 `state.json`), then apply the grouping/sorting/recompute below unchanged.
-Otherwise read `state.json`. For TaskNotes-derived promises, overlay
+Otherwise read `state.json`. For read-only-backend promises, overlay
 `itemMeta[<id>]` (`snoozedUntil`, `deadlineType`, verify metadata, and a
 reconcile-enriched `source`/`noteOnly`) onto the record at read time. Recompute
 `overdue` (expectBy < today, not met, AND
@@ -91,7 +88,7 @@ Then present, grouped and sorted:
 ## Rules
 
 - **Data, not tasks.** A promise is a lightweight record. Never auto-create a
-  TaskNote or any task from it. Promotion stays a separate, deliberate act.
+  a source record or any task from it. Promotion stays a separate, deliberate act.
 - **Reference, do not duplicate.** Link to the source; never paste raw content.
 - **Preserve everything.** Append-only history; status changes instead of
   deletes.
@@ -100,7 +97,7 @@ Then present, grouped and sorted:
   concurrent sweeps.
 - **Stakes are computed**, never hand-edited. Honor `stakesOverride` if set.
 - **Backend-aware, single write path.** Reads honor `config.ledger.backend`. In
-  v1 the `tasknotes` backend is read-only for the note itself: mark-met / update
+  v1 a read-only backend does not write its underlying records: mark-met / update
   / flip / note-edit actions produce drafts for the user to apply, never vault
   writes. ADHDecoder-owned overlay metadata for a read-only note (`snoozedUntil`,
   `deadlineType` override, verify metadata) is written to the `itemMeta`

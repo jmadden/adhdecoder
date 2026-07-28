@@ -17,7 +17,7 @@ Add three optional fields to a promise:
   record but do not surface it as a chase. Distinct from `dismissedFromBoard`
   (permanent removal); snooze is temporary and never deletes.
 
-**Backend-scoped writes:** for the read-only TaskNotes backend, `snoozedUntil`
+**Backend-scoped writes:** for the read-only backend, `snoozedUntil`
 and any verify metadata live in the `state.json` companion keyed by the item id,
 never written into the note.
 
@@ -65,7 +65,7 @@ A placeholder due date on an ongoing project causes false overdue-chasing. Use
 - **chase-in** computes overdue ONLY for `deadlineType: hard`. `soft` / `none`
   items never show as overdue.
 - They still surface via **drift staleness** if they go quiet.
-- **Adapter mapping (TaskNotes):** a note with a real `due` -> `hard`. A note
+- **Adapter mapping (a note-backed adapter):** a note with a real `due` -> `hard`. A note
   tagged `ongoing` (or carrying `scheduled` but no `due`) -> `soft`. Give the
   user a simple way to mark an item ongoing.
 
@@ -81,5 +81,5 @@ they-owe-me`, a confirm-by `expectBy`, and `why`.
 
 ## Guardrails
 
-Never auto-send / auto-post / auto-create tasks. Read-only on TaskNotes (snooze
+Never auto-send / auto-post / auto-create tasks. Read-only on read-only backends (snooze
 and verify metadata go to `state.json` only). Everything outward is a draft.

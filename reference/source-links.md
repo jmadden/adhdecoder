@@ -8,7 +8,7 @@ Build input. Drop into the repo as `reference/source-links.md`. Written
 The rule exists (every promise has a `source`; surfaces are spec'd to show a
 source link; "link, never paste"), but the link quality is weak:
 
-- A TaskNotes-derived promise gets `source` = an `obsidian://` link to the NOTE,
+- A read-only-backend promise gets `source` = a link to the backing NOTE,
   not the underlying issue / chat thread / email the action actually lives in.
 - Reconcile discovers the real live source (the ticket, the chat permalink, the
   sent email) but does not write it back, so it is found then discarded.
@@ -20,14 +20,14 @@ reconcile's discovered link is kept and shown.
 
 - **`source`** `{ type, ref, url }`: the best **actionable** source, prefer the
   underlying ticket / chat permalink / email over a note link.
-- **`noteRef`** (optional) `{ url }`: the `obsidian://` (or file) link to the
+- **`noteRef`** (optional) `{ url }`: a link to the backing note (a file or app URL) to the
   backing note, so the record is still one click away. Distinct from `source`.
 - If no underlying source can be found, `source` falls back to the note link,
   flagged `noteOnly: true`.
 
 ## Capture (where the link comes from)
 
-1. **TaskNotes adapter.** When reading a note, EXTRACT underlying source refs
+1. **note-backed adapter.** When reading a note, EXTRACT underlying source refs
    from its frontmatter/body and set `source` to the most relevant, `noteRef`
    to the note link:
    - issue keys (e.g. `ISSUE-123` pattern) -> build the tracker issue URL;
@@ -40,7 +40,7 @@ reconcile's discovered link is kept and shown.
 3. **Reconcile.** When it locates/confirms the live source, **write that link
    back** onto the promise's `source` (upgrading a note-only link). Persist per
    backend: `state.json`-backed promises persist it via the ledger; for a
-   read-only TaskNotes promise, persist the enriched link in the `state.json`
+   read-only-backend promise, persist the enriched link in the `state.json`
    companion keyed by item id (same pattern as `snoozedUntil` / verify metadata,
    never written to the note).
 
@@ -57,7 +57,7 @@ reconcile's discovered link is kept and shown.
 
 ## Guardrails
 
-- **Read-only preserved:** reconcile's source-link enrichment for TaskNotes goes
+- **Read-only preserved:** reconcile's source-link enrichment for a read-only backend goes
   to the `state.json` companion, never the note or the source.
 - **Link, never paste** raw content.
 - **No internal links in customer-facing output** (see radiate-out above).
@@ -65,7 +65,7 @@ reconcile's discovered link is kept and shown.
 
 ## Build scope (v1)
 
-- TaskNotes adapter: extract underlying refs -> `source` + `noteRef` (+
+- note-backed adapter: extract underlying refs -> `source` + `noteRef` (+
   `noteOnly` fallback).
 - Sweep: emit canonical permalinks as `source`.
 - Reconcile: write the discovered source link back (persist per backend rules).

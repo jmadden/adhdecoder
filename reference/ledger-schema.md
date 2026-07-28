@@ -37,7 +37,7 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **dismissedFromBoard** — ids the user killed off the board; never re-surface.
 - **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, verifyStatus,
   verifyReason, lastVerified, source, noteOnly } }`. Overlay store for items
-  whose canonical record is read-only (the TaskNotes backend), incl. a
+  whose canonical record is read-only (a read-only backend), incl. a
   reconcile-enriched `source` (and `noteOnly` cleared) for such a note. Builtin
   promises keep these on the record; the companion is never written into a
   note. The Query overlays it at read time.
@@ -90,7 +90,7 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **source** — `{ type, ref, url }`, the best ACTIONABLE source: prefer the
   underlying ticket / chat permalink / email over a note link. Link, never
   paste raw content.
-- **noteRef** — optional `{ url }` to the backing note (e.g. an `obsidian://`
+- **noteRef** — optional `{ url }` to the backing note (e.g. a file or app URL
   link), so the record is one click away. Distinct from `source`; null when
   there is no backing note.
 - **noteOnly** — bool (default false). True when no actionable source was found

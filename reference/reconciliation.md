@@ -12,13 +12,13 @@ instance `config.json`, not here - same as your watchlist/roster already work._
 
 ## Why this is front and center
 
-The ledger (especially the read-only TaskNotes backend) inherits any staleness
+The ledger (especially the read-only backend) inherits any staleness
 or mis-tagging in its records. **Freshness is not verification.** Before
 ADHDecoder acts on a promise (chase it, publish it, or confidently surface it),
 it must confirm against the **live source** that the item is: still open,
 correctly owned, on the right customer, and current.
 
-Proven need (2026-07-27): a TaskNote "Respond to `<person>` re `<topic>`"
+Proven need (2026-07-27): a read-only-backend promise "Respond to `<person>` re `<topic>`"
 tagged to a customer was mis-attributed - the named person was not actually on
 that customer's team (the customer's real CSM/TAM were different people), and
 the topic had already been handled. Only a live chat/issue-tracker cross-check
@@ -48,7 +48,7 @@ catches that; the freshness gate caught it by luck.
   => `mis-attributed`. Use clear signals in v1 (user replied after the ask,
   explicit resolution words, linked ticket status); defer deep NLP.
 - **email:** the thread's latest state, whether the user has replied.
-- **tasknote-derived promise:** its real source of truth is the UNDERLYING system
+- **note-backed promise:** its real source of truth is the UNDERLYING system
   referenced in the note (a Jira key, a customer channel), not the note itself.
   Extract that ref and reconcile against it. No linkable source => `unverifiable`.
 
@@ -80,6 +80,10 @@ promise:
 
 - **right before** it would be chased (chase-in) or published (radiate-out);
 - as a **bounded batch** during the sweep for high-stakes / aging items;
+- **on reference:** whenever the user references a specific tracked item or
+  context in conversation and a status claim is about to be made - verify that
+  item (full thread + note status) before answering (see
+  `reference/verification-discipline.md`).
 
 Cache `lastVerified` with a TTL (e.g. do not re-hit a given source for the same
 item more than ~once/day). This keeps reconciliation affordable as sources grow.
@@ -88,7 +92,7 @@ item more than ~once/day). This keeps reconciliation affordable as sources grow.
 
 - `verified-open` => proceed (chase / publish).
 - `resolved` => for the `state.json` backend, mark the promise met/closed. For
-  the **read-only TaskNotes backend, do NOT write** the note; surface "this looks
+  the **read-only backend, do NOT write** the note; surface "this looks
   done, close it?" as a draft/instruction for the user (or their existing
   Decoder) to apply.
 - `reassigned` => record the new owner; if it moved off the user, drop it from
@@ -120,9 +124,9 @@ updates verify metadata.
   `config.json`, not in this repo).
 - Wire reconcile into **radiate-out's verified-only gate** and a
   **chase-in pre-check** first; drift/panic/sweep unification follows.
-- Read-only on TaskNotes preserved (propose closes, never write).
+- Read-only on read-only backends preserved (propose closes, never write).
 
 ## Defer
 
 - Deep NLP resolution detection in chat.
-- Auto-writing closes back into TaskNotes (stays read-only; propose only).
+- Auto-writing closes back into a read-only backend (stays read-only; propose only).

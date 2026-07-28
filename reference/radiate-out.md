@@ -14,10 +14,10 @@ others; radiate-out tells others where things stand before they ask.
 ## Generic
 
 - Store-agnostic: reads the ledger through the same Query interface as chase-in
-  / drift / panic (so it works on `state.json` or the TaskNotes backend
+  / drift / panic (so it works on `state.json` or a read-only backend
   unchanged). Group by the promise `context` / customer field.
 - Target-agnostic: the publish target is a configured `~~chat` canvas/channel,
-  or simply a copyable draft. No Obsidian/Slack specifics in the core skill.
+  or simply a copyable draft. No storage/chat product specifics in the core skill.
 
 ## Two modes
 

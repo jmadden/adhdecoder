@@ -43,8 +43,9 @@ they're looking at, not list everything at once. Read `reference/method.md`
    `weight` only to break ties between otherwise-equal items (stakes > time >
    weight - weight never buries urgency; see `reference/scheduling.md`). Show
    the **top 2-3**, not the full board - panic needs a short list, not a dump.
-   Each shown item includes its clickable `source.url` (panic renders to the
-   user in chat, an internal surface, so the real link is fine here).
+   Each shown item includes its `verifyStatus` and its clickable `source.url`
+   (panic renders to the user in chat, an internal surface, so the real link and
+   status tag are fine here).
 2. **A drift check.** Invoke the `drift` skill's check and fold its output in
    as one or two short lines (e.g. "X hasn't visibly moved in N days"). If
    drift finds nothing, say so briefly and move on.
@@ -60,10 +61,12 @@ they're looking at, not list everything at once. Read `reference/method.md`
 
 **Reconcile only what you show.** Cross-check just the items you are about to
 surface (item 1's top few, and item 3's avoided item) via the `reconcile`
-skill - never the whole ledger, so panic stays fast. Skip anything reconcile
-returns `resolved` / `reassigned` / `mis-attributed` and drop to the next
-candidate. Reuse the drift check's reconcile results (item 2) so nothing is
-verified twice. An `unverifiable` item may still show, marked "unconfirmed."
+skill - never the whole ledger, so panic stays fast. An item whose
+`verifyStatus` is `null` or past the TTL is reconciled before it can show -
+never assert a stale item, even mid-panic. Skip anything reconcile returns
+`resolved` / `reassigned` / `mis-attributed` and drop to the next candidate.
+Reuse the drift check's reconcile results (item 2) so nothing is verified twice.
+An `unverifiable` item may still show, marked "unconfirmed" (never asserted).
 
 Keep the whole thing short enough to read in one breath. If there is
 genuinely nothing time-sensitive open, say that plainly and stop - do not

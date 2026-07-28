@@ -24,7 +24,7 @@ chase the user. Read `reference/radiate-out.md` (the full spec) and
 
 - **Store-agnostic.** Reads the ledger through the exact same Query interface
   as `chase-in`/`drift`/`panic` (the `ledger` skill's Query, backend-aware) -
-  works unchanged on `state.json`, the TaskNotes adapter, or any future
+  works unchanged on `state.json`, the note-backed adapter, or any future
   backend.
 - **Target-agnostic.** The publish target is whatever `~~chat` category is
   configured (a canvas/channel) - or, if none is configured, or the user just
@@ -99,7 +99,7 @@ gate on its `verifyStatus`:
 
 - **`verified-open`** -> include in In flight / Waiting on you as normal.
 - **`resolved`** -> route per `reconcile`'s own handling (auto-marked met for
-  `state.json`; a "looks done, close it?" draft for TaskNotes) - if it closed
+  `state.json`; a "looks done, close it?" draft for a read-only backend) - if it closed
   recently, it can appear under Recently shipped.
 - **`reassigned`** -> drop from this context's draft; it is no longer this
   promise's story to tell here.
@@ -121,9 +121,17 @@ For each context, produce:
 
 1. The status draft (In flight / Waiting on you / Recently shipped, non-empty
    sections only), ready to copy or post to the configured `~~chat` target.
+   **Customer-facing: no `verifyStatus`, no `source.url`, no internal ids** -
+   verification never leaks into outward copy (see the hard rule in Guardrails).
 2. A separate, clearly labeled **"confirm before sending"** list of anything
-   withheld, with the reason - the user decides what to add before
-   publishing.
+   withheld. This list is internal, so each entry shows its `verifyStatus` +
+   reason + the actionable `source.url` inline (the operator needs the link to
+   go confirm) - the user decides what to add before publishing. Anything whose
+   `verifyStatus` is `null` or past the TTL is reconciled first, then lands here
+   if it can't be verified clean - it never goes straight into the draft.
+
+Lead this internal output with a one-line **freshness header** - how long since
+the ledger's `lastSwept` - so the user knows how current the picture is.
 
 The user approves and posts (or asks for edits). This skill posts nothing
 itself.

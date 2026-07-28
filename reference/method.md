@@ -115,4 +115,8 @@ note), and cools down after clearing. Fires only on time-sensitive items.
 - Never auto-create tasks; promotion is deliberate.
 - Hide raw feeds; decoded shortlist only, one click to source.
 - Verified-only goes to any customer-facing surface.
+- **Verified before surfaced.** Never present a promise as a settled fact or a
+  required action without a fresh reconcile verdict shown inline. A search
+  snippet is never enough: read the full source thread and the backing note
+  first. See `reference/verification-discipline.md`.
 - No hidden files; single writer per synced location.

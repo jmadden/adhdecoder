@@ -29,13 +29,25 @@ configured `pivots` (see README) or by the user on demand.
 2. **Reconcile** the new / aging / about-to-surface items via `reconcile`
    (verify before flagging; honor the TTL cache).
 3. **Update the ledger**: dedup, write/enrich promises + source links, per the
-   `ledger` skill and the active backend. Read-only backends (TaskNotes) get
+   `ledger` skill and the active backend. Read-only backends get
    overlay writes to the `state.json` `itemMeta` companion only, never the note.
 4. **Refresh the board file** at `config.schedule.boardPath` (see below).
-5. **Recap**: one line - what changed, what is newly slipping. Print to chat.
+5. **Recap**: one line - ledger freshness (how long since `lastSwept`, now
+   refreshed), what changed, and what is newly slipping. Print to chat.
 
 Never auto-send, never auto-post. A run drafts, updates the ledger, and
 refreshes the board; nothing leaves for a customer.
+
+## Session-start refresh (lead with changes)
+
+On session start, or the first surfacing after a gap, check ledger freshness
+before showing anything. If `lastSwept` is stale (past the sweep cadence /
+noticeably old), **run the sweep first**, then lead with **"what changed since
+the last sweep"** - so the user works from current reality, not memory. The
+sweep is read-only against sources and writes only `state.json` + the board, so
+this auto-refresh stays within the hard guardrails (no auto-send/post). If the
+ledger is already fresh, skip the sweep and surface directly. See
+`reference/verification-discipline.md` (Rule 3).
 
 ## The board file (read-only generated view)
 
@@ -58,7 +70,7 @@ feeds.
 
 ## Guardrails
 
-- Only `state.json` and the board file are written. Read-only against TaskNotes
+- Only `state.json` and the board file are written. Read-only against read-only backends
   and every source (enrichment lands in `state.json` / `itemMeta`).
 - Never auto-send / auto-post / auto-create tasks elsewhere.
 - Weight is secondary to urgency (stakes > time > weight); every enabled source
