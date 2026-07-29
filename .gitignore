@@ -1,0 +1,18 @@
+# The instance layer lives OUTSIDE this repo. These guards ensure real instance
+# data never gets committed even if someone points instancePath into the repo
+# tree or copies the example in place. The example TEMPLATES stay tracked.
+
+# Instance data (never commit)
+config.json
+state.json
+
+# Common instance-folder names
+_decoder/
+instance/
+
+# OS cruft / editor / FUSE leftovers
+.DS_Store
+.fuse_hidden*
+
+# Keep the templates tracked (they carry no real data)
+!config/*.example.json

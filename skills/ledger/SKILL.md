@@ -20,7 +20,10 @@ record shape before writing.
    `builtin`, use `state.json` as below. If a read-only backend adapter is configured, read/Query are served by that adapter; writes stay on the builtin `state.json`
    companion in v1.
 1. Read the instance `config.json` (its path is the configured `instancePath`,
-   or ask the user once and remember it).
+   or ask the user once and remember it). **First-run gate:** if `config.json`
+   is absent or unparseable, do not invent paths - route to `setup`
+   ("ADHDecoder isn't set up yet - want to run setup?"). Read-side skills inherit
+   this through Query. See `reference/onboarding.md`.
 2. State file = `<storage.instancePath>/<storage.overrides.stateFile>`
    (default `state.json`).
 3. If it does not exist, create it from `config/state.example.json` shape.

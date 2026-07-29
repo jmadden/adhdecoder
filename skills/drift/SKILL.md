@@ -24,6 +24,9 @@ slip from inattention, not forgetting.
 
 ## What this does / does not do
 
+- **First run.** If ADHDecoder isn't set up (no config / no enabled source),
+  offer `setup` instead of returning an empty board. See
+  `reference/onboarding.md`.
 - **Detects from the ledger, then reconciles what it surfaces.** Staleness is
   computed from ledger dates - an **approximation** of activity (how long since
   the record was last confirmed, not a live activity feed). Before surfacing any

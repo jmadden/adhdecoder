@@ -20,6 +20,11 @@ configured `pivots` (see README) or by the user on demand.
 
 ## What a run does (in order)
 
+0. **First-run check (non-interactive).** If config is absent or thin (no
+   enabled source, or missing backend + identity), do NOT prompt (a scheduled
+   run cannot) - print a clear "ADHDecoder isn't set up; run `setup`" recap and
+   exit cleanly. Never hang waiting for input, never sweep an empty config, never
+   emit an empty board. See `reference/onboarding.md`.
 1. **Sweep**, ordered by source `weight` (high first, deepest coverage),
    honoring `cadence` for this run: always include `every-run` sources; include
    any source whose cadence is due (`hourly` / `daily`); and **guarantee every

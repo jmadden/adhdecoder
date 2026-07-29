@@ -22,6 +22,9 @@ ADHD design principles"), and `reference/ledger-schema.md` before running.
 
 ## What this does / does not do
 
+- **First run.** If ADHDecoder isn't set up (no config / no enabled source),
+  offer `setup` instead of sweeping against an empty config. See
+  `reference/onboarding.md`.
 - **Source-agnostic and store-agnostic.** Knows nothing about any specific
   product or knowledge base. It works from source **categories** (`~~chat`,
   `~~email`, `~~issue tracker`, ...) mapped in `config.json`, and writes to the

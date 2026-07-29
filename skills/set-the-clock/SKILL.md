@@ -20,6 +20,8 @@ Capture the promised-by date as work moves, then hand it off. Read
 
 ## What this does / does not do
 
+- **First run.** If ADHDecoder isn't set up (no config / no backend), offer
+  `setup` before logging a promise. See `reference/onboarding.md`.
 - **Prompts, never auto-logs. Drafts, never auto-sends.** The user always
   confirms before a promise is written or a reply goes out.
 - Does **not** sweep sources (later phases). It fires on what is in front of

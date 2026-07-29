@@ -23,6 +23,9 @@ more prominent, never more numerous (No flood).
 
 ## What this does / does not do
 
+- **First run.** If ADHDecoder isn't set up (no config / no enabled source),
+  offer `setup` instead of returning an empty board. See
+  `reference/onboarding.md`.
 - **Reads the ledger, plus a reconcile pre-check.** Locate and load promises
   exactly as the `ledger` skill's Query does, recomputing `overdue` and
   `stakes` at read time. Do not sweep sources. Before drafting a nudge, cross-

@@ -22,6 +22,9 @@ chase the user. Read `reference/radiate-out.md` (the full spec) and
 
 ## What this does / does not do
 
+- **First run.** If ADHDecoder isn't set up (no config / no enabled source),
+  offer `setup` instead of returning an empty draft. See
+  `reference/onboarding.md`.
 - **Store-agnostic.** Reads the ledger through the exact same Query interface
   as `chase-in`/`drift`/`panic` (the `ledger` skill's Query, backend-aware) -
   works unchanged on `state.json`, the note-backed adapter, or any future

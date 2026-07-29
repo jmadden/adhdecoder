@@ -119,4 +119,7 @@ note), and cools down after clearing. Fires only on time-sensitive items.
   required action without a fresh reconcile verdict shown inline. A search
   snippet is never enough: read the full source thread and the backing note
   first. See `reference/verification-discipline.md`.
+- **First run.** If config is absent or thin (no enabled source, or missing
+  backend + identity), offer `setup` rather than erroring, inventing paths, or
+  returning an empty board. See `reference/onboarding.md`.
 - No hidden files; single writer per synced location.

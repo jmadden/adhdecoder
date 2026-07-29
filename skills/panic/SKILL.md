@@ -19,6 +19,9 @@ they're looking at, not list everything at once. Read `reference/method.md`
 
 ## What this does / does not do
 
+- **First run.** If ADHDecoder isn't set up (no config / no enabled source),
+  offer `setup` instead of returning an empty board. See
+  `reference/onboarding.md`.
 - **Reads the ledger; reconciles only what it surfaces.** Same load path as
   `chase-in`, recomputing `overdue` and `stakes` at read time. It does not
   sweep sources, but before showing an item it cross-checks that handful via
