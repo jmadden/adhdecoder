@@ -23,6 +23,7 @@
     }
   },
 
+  "_ledger_comment": "backend selects the promise store. 'builtin' (default) = state.json, the only store ADHDecoder writes. 'obsidian' = the optional read-only Obsidian adapter (adapters/obsidian); it also accepts any deprecated legacy backend value as an alias.",
   "ledger": {
     "backend": "builtin"
   },

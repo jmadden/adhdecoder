@@ -17,7 +17,11 @@ record shape before writing.
 ## Locate state
 
 0. **Select backend.** Read `config.ledger.backend` (default `builtin`). If
-   `builtin`, use `state.json` as below. If a read-only backend adapter is configured, read/Query are served by that adapter; writes stay on the builtin `state.json`
+   `builtin`, use `state.json` as below. Any other value `X` resolves to the
+   adapter skill `ledger-X` (per `reference/ledger-backend-interface.md`). If no
+   `ledger-<X>` skill matches the configured value, it may be a **deprecated
+   alias** an adapter still accepts - route to the adapter that declares it and
+   surface its one-line rename note. If a read-only backend adapter is configured, read/Query are served by that adapter; writes stay on the builtin `state.json`
    companion in v1.
 1. Read the instance `config.json` (its path is the configured `instancePath`,
    or ask the user once and remember it). **First-run gate:** if `config.json`

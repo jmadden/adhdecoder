@@ -7,10 +7,10 @@ Slack / email / Jira data.
 ## Architecture context (decided with the user, 2026-07-27)
 
 - **Generic-first.** The plugin is source-agnostic and store-agnostic. It knows
-  nothing about Obsidian, Radar, or TaskNotes.
+  nothing about any specific note store or dashboard.
 - **Pluggable ledger backend.** Default = `state.json` (what every user gets).
-  An OPTIONAL adapter lets a user with an existing task store (e.g. Obsidian
-  TaskNotes) point the plugin at it instead, so the sweep enriches rather than
+  An OPTIONAL adapter lets a user with an existing task store (e.g. the Obsidian
+  adapter) point the plugin at it instead, so the sweep enriches rather than
   duplicates. Adapters come later; build and prove everything on `state.json`.
 - **Source priority is config, not code.** One user lives in chat, another in
   email. The sweep reads the enabled sources and their order from config.
@@ -85,7 +85,7 @@ since lastSwept, still open." Adapter specifics:
 
 ## Deferred (not this build)
 
-- The optional external-store adapter (e.g. Obsidian TaskNotes) for users who
+- The optional external-store adapter (e.g. the Obsidian adapter) for users who
   already have a task system.
 - Source-based auto-close (mark a promise met when the source shows it resolved),
   the natural extension of the "verify against source of truth" rule.

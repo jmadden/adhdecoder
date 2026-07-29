@@ -22,12 +22,15 @@ Never let bucket 2 or 3 content leak into this repo.
 ## Layout
 
 ```
-.claude-plugin/plugin.json   manifest (name: adhdecoder), version bumped per change
-skills/<name>/SKILL.md        skills (instructions FOR Claude)
+.claude-plugin/plugin.json   manifest (name: adhdecoder); version bumped per
+                              change; `skills` lists extra discovery paths
+skills/<name>/SKILL.md        core skills (instructions FOR Claude)
+adapters/<name>/              optional backend adapters (SKILL.md + reference.md),
+                              e.g. adapters/obsidian; registered in plugin.json
 reference/method.md           the durable method (the brain)
 reference/ledger-schema.md    promise record shape + itemMeta companion
 reference/*.md                per-capability specs (sweep, reconciliation,
-                              radiate-out, adapter-tasknotes, handoff-followups)
+                              radiate-out, handoff-followups)
 config/*.example.json         TEMPLATES only, no real data
 CONNECTORS.md                 tool-category placeholders (~~category)
 ```
@@ -65,9 +68,11 @@ backend-agnostic:
 
 - **builtin** (default): `state.json` in the instance layer. The only store
   ADHDecoder writes.
-- **tasknotes:** read-only overlay of the user's Obsidian TaskNotes. Never writes
-  the note; ADHDecoder-owned metadata (snooze, `deadlineType` override, verify
-  results) goes to the `state.json` `itemMeta` companion keyed by item id.
+- **obsidian:** read-only overlay of the user's Obsidian notes (Markdown + YAML
+  frontmatter). Never writes the note; ADHDecoder-owned metadata (snooze,
+  `deadlineType` override, verify results) goes to the `state.json` `itemMeta`
+  companion keyed by item id. Lives in `adapters/obsidian/`, which also accepts
+  any deprecated legacy backend value as an alias.
 
 ## What's built
 
@@ -86,7 +91,8 @@ The full loop plus a cross-cutting verification layer. Each is a skill under
 - **reconcile** (cross-cutting): cross-check a promise against its live source
   before any skill chases/publishes. One verification path — chase-in /
   radiate-out / drift / panic / sweep all call it.
-- **ledger-tasknotes**: the optional read-only TaskNotes backend.
+- **ledger-obsidian**: the optional read-only Obsidian backend (in
+  `adapters/obsidian/`, not `skills/`).
 
 Refinements layered on: `why` / `deadlineType` (hard/soft/none) / `snoozedUntil`
 promise fields; handoff follow-ups; delivery-flip (i-owe → they-owe) in reconcile.

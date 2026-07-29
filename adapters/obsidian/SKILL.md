@@ -1,27 +1,36 @@
 ---
-name: ledger-tasknotes
+name: ledger-obsidian
 description: >
-  Read-only TaskNotes ledger backend for ADHDecoder. Applies only when
-  config.ledger.backend is "tasknotes" (default is builtin state.json). Reads
-  the user's Obsidian TaskNotes (storage.knowledgePath + overrides.tasksDir),
-  maps each to a promise, and serves the ledger's read/Query operations so
-  chase-in, drift, and panic run unchanged against real tasks. Never writes,
-  creates, renames, or modifies any vault file; mark-met / log-update actions
-  become drafts for the user to apply. Usually invoked via the ledger's backend
+  Read-only Obsidian ledger backend for ADHDecoder. Applies when
+  config.ledger.backend is "obsidian" (default is builtin state.json); also
+  accepts the deprecated alias "tasknotes" for existing configs. Reads the
+  user's Obsidian notes (storage.knowledgePath + overrides.tasksDir) - Markdown
+  with YAML frontmatter, as written by the Obsidian TaskNotes plugin - maps each
+  to a promise, and serves the ledger's read/Query operations so chase-in,
+  drift, and panic run unchanged against real tasks. Never writes, creates,
+  renames, or modifies any vault file; mark-met / log-update actions become
+  drafts for the user to apply. Usually invoked via the ledger's backend
   selection, not directly.
 ---
 
-# Ledger backend: TaskNotes (read-only v1)
+# Ledger backend: Obsidian (read-only v1)
 
 An OPTIONAL ledger backend. Serves the ledger's **read/Query** operations from
-the user's existing Obsidian TaskNotes instead of `state.json`, without a second
+the user's existing Obsidian notes instead of `state.json`, without a second
 store and without touching a single vault file. Read
-`reference/adapter-tasknotes.md` (the full spec + field mapping) and
+`adapters/obsidian/reference.md` (the full spec + field mapping) and
 `reference/ledger-schema.md` (the promise shape the read-side skills expect)
 before running.
 
-Active only when `config.ledger.backend == "tasknotes"`. The default `builtin`
-(state.json) is unaffected. Writes are never served here (see Read-only).
+Active only when `config.ledger.backend == "obsidian"`. **Deprecated alias:** a
+legacy `config.ledger.backend == "tasknotes"` still activates this adapter -
+treat it as `obsidian` and surface a one-line note ("ledger backend renamed
+`tasknotes` -> `obsidian`; update your config at your convenience"). The default
+`builtin` (state.json) is unaffected. Writes are never served here (see
+Read-only).
+
+The notes are Markdown with YAML frontmatter, as written by the Obsidian
+**TaskNotes** plugin - that is the note format this adapter reads, not its name.
 
 ## Locate
 
@@ -34,15 +43,15 @@ Active only when `config.ledger.backend == "tasknotes"`. The default `builtin`
 
 Parse each note's frontmatter with a **real YAML parser**, never line-by-line
 string matching. An empty or missing key (e.g. a blank `due:`) is **absent** -
-never read as the next line's value. Confirmed needed on real data: TaskNotes
+never read as the next line's value. Confirmed needed on real data: notes
 routinely have blank `due:` and `customer:` fields, and a naive line-grab
 misreads the following line as that field's value. Treat a key that is present
 but empty (`due:`, `due: ""`, `due: null`) identically to the key being missing
 entirely.
 
-## Map each TaskNote to a promise
+## Map each note to a promise
 
-Per the field table in `reference/adapter-tasknotes.md`:
+Per the field table in `adapters/obsidian/reference.md`:
 
 | Promise field | From |
 |---|---|
@@ -73,7 +82,7 @@ Same verify spirit as the sweep: `status: done` is closed - never chase it.
 
 ## Overlay the itemMeta companion (read time)
 
-A TaskNote is read-only, so ADHDecoder-owned overlay fields live in the
+An Obsidian note is read-only, so ADHDecoder-owned overlay fields live in the
 `state.json` `itemMeta` companion keyed by the note's item id, NEVER in the
 note. At read time, overlay `itemMeta[<id>]` onto the derived promise:
 `snoozedUntil`, a `deadlineType` override, verify metadata
@@ -90,10 +99,10 @@ read-side skills need no change:
 - Recompute `overdue` (`expectBy` < today and open) and `stakes` at read time.
   An item with no `due` can never be overdue - it stays visible but off the
   chase board.
-- The board is the **union** of: open TaskNotes (mostly `i-owe-them`) + any
+- The board is the **union** of: open Obsidian notes (mostly `i-owe-them`) + any
   `state.json` promises from the builtin companion (sweep-found `they-owe-me`
-  that were never promoted to a TaskNote). Read both; do not merge the stores.
-  If an item appears in both (same `source` link), prefer the TaskNote and drop
+  that were never promoted to a note). Read both; do not merge the stores.
+  If an item appears in both (same `source` link), prefer the note and drop
   the duplicate.
 - Group and sort exactly as the builtin Query: They owe me / I owe them, overdue
   first, high-stakes flagged.
@@ -102,8 +111,8 @@ Full unification of the two stores is deferred; v1 just reads the union.
 
 ## Read-only (hard - v1 never touches the vault)
 
-- Never write, create, rename, move, or modify any TaskNote or Radar file.
-- Never auto-create a TaskNote (including for sweep-found `they-owe-me` items -
+- Never write, create, rename, move, or modify any note or Radar file.
+- Never auto-create a note (including for sweep-found `they-owe-me` items -
   those stay in the builtin `state.json` companion).
 - When the user acts on a board item ("mark met", "handled", "log an update",
   "flip to they-owe on delivery"), produce a **draft edit or instruction** for
@@ -124,7 +133,7 @@ ADHDecoder becomes the single read-write owner.
 ## Guardrails
 
 - Read-only: zero vault writes, ever, in v1.
-- Never auto-create tasks; write actions are drafts.
+- Never auto-create notes; write actions are drafts.
 - Hide raw feeds: link via `obsidian://`, never copy note bodies into another
   store.
 - Stakes computed at read time; honor `stakesOverride` if present.

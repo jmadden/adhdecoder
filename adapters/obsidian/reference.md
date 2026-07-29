@@ -1,9 +1,10 @@
-# ADHDecoder — TaskNotes Adapter (read-only v1) Spec
+# ADHDecoder — Obsidian Adapter (read-only v1) Spec
 
-Build input. Drop into the plugin repo as `reference/adapter-tasknotes.md`.
+Build input. Drop into the plugin repo as `adapters/obsidian/reference.md`.
 Written 2026-07-27. This is an OPTIONAL ledger backend, not core. The default
 backend stays `state.json`; this one is opt-in for a user who already keeps
-tasks as Markdown notes with YAML frontmatter (e.g. Obsidian TaskNotes).
+tasks as Markdown notes with YAML frontmatter (the format the Obsidian
+**TaskNotes** plugin writes - that is the note format, not the adapter's name).
 
 ## Purpose
 
@@ -14,7 +15,7 @@ produces a true board, touching nothing.
 
 ## Why read-only (v1)
 
-The user's existing Decoder already writes these TaskNotes on a schedule. Two
+The user's existing Decoder already writes these notes on a schedule. Two
 writers on the same files = conflicts. Read-only means **zero conflict**: the
 existing Decoder keeps maintaining the files, ADHDecoder just reads them. They
 coexist. Write-back is a later, deliberate step at cutover, not now.
@@ -22,21 +23,24 @@ coexist. Write-back is a later, deliberate step at cutover, not now.
 ## Config
 
 - Ledger backend selector in `config.json`, e.g.
-  `"ledger": { "backend": "tasknotes" }` (default `"builtin"` = `state.json`).
-- TaskNotes location comes from existing config: `storage.knowledgePath` +
+  `"ledger": { "backend": "obsidian" }` (default `"builtin"` = `state.json`).
+  A legacy `"backend": "tasknotes"` is accepted as a **deprecated alias** for
+  `obsidian` - the adapter treats it identically and surfaces a one-line rename
+  note.
+- Note location comes from existing config: `storage.knowledgePath` +
   `storage.overrides.tasksDir` (e.g. `.../Work/Tasks/`).
 
 ## Read (the only thing it does)
 
 Enumerate `*.md` in `tasksDir` (skip `Archive/` unless asked). Parse each
-TaskNote's frontmatter + body and map to a promise via the ledger interface:
+note's frontmatter + body and map to a promise via the ledger interface:
 
 | Promise field           | Derived from                                                                                                                                                                                                                                    |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                    | the file path (stable)                                                                                                                                                                                                                          |
 | `title`                 | `title` / filename                                                                                                                                                                                                                              |
 | `context`               | `customer` (fall back to `projects`)                                                                                                                                                                                                            |
-| `direction`             | infer from the title verb: "chase / follow up / waiting on / get X from" => `they-owe-me`; "deliver / provide / send / build / answer / set up / configure" => `i-owe-them`. Default `i-owe-them` (TaskNotes are mostly the user's own to-dos). |
+| `direction`             | infer from the title verb: "chase / follow up / waiting on / get X from" => `they-owe-me`; "deliver / provide / send / build / answer / set up / configure" => `i-owe-them`. Default `i-owe-them` (these notes are mostly the user's own to-dos). |
 | `owner` / who's waiting | `requester` and/or `customer`                                                                                                                                                                                                                   |
 | `expectBy`              | `due` if present. If absent: the item is "open, no date" — visible but NOT a chase candidate (can't compute overdue).                                                                                                                           |
 | `status`                | `todo` / `in-progress` / `blocked` => open; `done` => closed (skip from chases; may show under "recently done"); use `completedDate`                                                                                                            |
@@ -49,11 +53,11 @@ Same verify spirit as the sweep: `status: done` is closed, never chase it.
 
 **Robust parsing (fix, 2026-07-27).** Parse frontmatter with a real YAML
 parser. An empty or missing key (e.g. a blank `due:`) is ABSENT, never a grab of
-the next line's value. Confirmed needed: real TaskNotes have blank `due:` and
+the next line's value. Confirmed needed: real notes have blank `due:` and
 `customer:` fields, and a naive line-grab mis-read them.
 
 **No-due staleness fallback (fix, 2026-07-27).** On real data ~60% of open
-TaskNotes have no `due` date, many of them blocked / high-priority (the
+notes have no `due` date, many of them blocked / high-priority (the
 silent-rot zone). Date-based chasing misses all of them. So for an OPEN promise
 with no `expectBy`, drift uses a **staleness** signal instead: days since
 `lastVerified` (from `dateModified`), counted in BUSINESS days. Surface it when:
@@ -88,25 +92,25 @@ with `noteOnly: true`. A reconcile-discovered source link is persisted to the
 
 ## Never (hard, read-only)
 
-- Never write, create, rename, move, or modify any TaskNote or Radar file.
-- Never auto-create TaskNotes.
+- Never write, create, rename, move, or modify any note or Radar file.
+- Never auto-create notes.
 - When the user acts on a board item ("mark met", "handled", "log an update"),
   produce a **draft / instruction** for the user to apply (or let the existing
   Decoder handle the write). ADHDecoder writes nothing to the vault in v1.
 
 ## Interface (why the other skills don't change)
 
-Implement the ledger's read/Query operations against TaskNotes so `chase-in`,
+Implement the ledger's read/Query operations against the notes so `chase-in`,
 `drift`, and `panic` call the ledger interface unchanged. Only the backend
 swaps; the read-side skills are backend-agnostic.
 
 ## They-owe / sweep items (scope note)
 
-TaskNotes are mostly the user's own (`i-owe-them`) work. Sweep-found
-`they-owe-me` stalls that the user has NOT promoted to a TaskNote must NOT be
-auto-created as TaskNotes (guardrail). For v1 they continue to live in the
-builtin `state.json` companion. So with the TaskNotes backend active, the board
-is the UNION of: open TaskNotes (mostly i-owe) + any `state.json` promises
+These notes are mostly the user's own (`i-owe-them`) work. Sweep-found
+`they-owe-me` stalls that the user has NOT promoted to a note must NOT be
+auto-created as notes (guardrail). For v1 they continue to live in the
+builtin `state.json` companion. So with the Obsidian backend active, the board
+is the UNION of: open notes (mostly i-owe) + any `state.json` promises
 (sweep-found they-owe). Full unification is deferred.
 
 ## Coexistence
@@ -118,7 +122,8 @@ becomes the single read-write owner.
 
 ## Test (do in Cowork, live data)
 
-1. Set `config.ledger.backend = "tasknotes"`.
+1. Set `config.ledger.backend = "obsidian"` (a legacy `"tasknotes"` still works
+   as a deprecated alias).
 2. Run `chase-in` and `panic`; confirm they produce a real board from the actual
-   TaskNotes (mostly i-owe items, with due dates driving overdue).
-3. Confirm ZERO writes: TaskNote file mtimes and `git status` unchanged after.
+   notes (mostly i-owe items, with due dates driving overdue).
+3. Confirm ZERO writes: note file mtimes and `git status` unchanged after.

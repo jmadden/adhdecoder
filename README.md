@@ -48,9 +48,10 @@ Each capability is a skill; together they close the follow-up loop:
 | 💬 | **help**          | orientation + the command cheat-sheet                      |
 | 🩺 | **doctor**        | read-only health check of your setup                       |
 
-Plus an optional read-only **note-backed backend** (run it against your existing
-Markdown tasks instead of a fresh store - TaskNotes is the shipped example) and a
-schedulable **daily-run** routine that does one pass and leaves you a board.
+Plus an optional read-only **Obsidian backend** (run it against your existing
+Obsidian notes - Markdown + YAML frontmatter - instead of a fresh store; ships in
+`adapters/obsidian/`) and a schedulable **daily-run** routine that does one pass
+and leaves you a board.
 
 ## Install (Claude Code)
 
@@ -113,10 +114,11 @@ The plugin talks to storage through an adapter, not a hardcoded location.
 
 - **`builtin`** (default): the promise store is `state.json` - the only store
   ADHDecoder writes.
-- **A note-backed adapter** (optional, read-only): overlay your existing Markdown
-  tasks. Any value `X` resolves to a `ledger-X` skill; ADHDecoder never mutates
-  the notes, and its own metadata (snooze, verify results) goes to a `state.json`
-  companion. See `reference/ledger-backend-interface.md`.
+- **The Obsidian adapter** (optional, read-only): overlay your existing Obsidian
+  notes. Set `ledger.backend: "obsidian"` (any value `X` resolves to a `ledger-X`
+  skill); ADHDecoder never mutates the notes, and its own metadata (snooze,
+  verify results) goes to a `state.json` companion. Ships in `adapters/obsidian/`;
+  see `reference/ledger-backend-interface.md`.
 
 **Two rules that matter:** 👀 **No hidden files** (everything written is visible,
 never dot-prefixed) and ✍️ **Single writer** (run sweeps on one machine at a
@@ -188,5 +190,6 @@ repo. **Leaving a context? Drop the instance, keep the method.**
 
 The durable method lives in `reference/method.md`; onboarding detail in
 `reference/onboarding.md`; per-capability specs (sweep, reconciliation,
-verification discipline, scheduling, source-links, the note-backed adapter) live
-alongside them in `reference/`. Repo/maintainer orientation is in `CLAUDE.md`.
+verification discipline, scheduling, source-links) live alongside them in
+`reference/`; optional backend adapters live in `adapters/` (e.g. the Obsidian
+adapter in `adapters/obsidian/`). Repo/maintainer orientation is in `CLAUDE.md`.
