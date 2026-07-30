@@ -36,7 +36,8 @@ configured `pivots` (see README) or by the user on demand.
 3. **Update the ledger**: dedup, write/enrich promises + source links, per the
    `ledger` skill and the active backend. Read-only backends get
    overlay writes to the `state.json` `itemMeta` companion only, never the note.
-4. **Refresh the board file** at `config.schedule.boardPath` (see below).
+4. **Refresh the board file** at `config.schedule.boardPath` - render the HTML
+   dashboard from the ledger per `reference/dashboard.md` (see below).
 5. **Recap**: one line - ledger freshness (how long since `lastSwept`, now
    refreshed), what changed, and what is newly slipping. Print to chat.
 
@@ -56,22 +57,21 @@ ledger is already fresh, skip the sweep and surface directly. See
 
 ## The board file (read-only generated view)
 
-Write a refreshed, read-only board to `config.schedule.boardPath` (overwrite in
-place; a visible file, e.g. Markdown). Scheduled runs are non-interactive, so
-this is the durable place the user looks between runs. Contents, rebuilt from
-the ledger each run:
+Render the multi-tab HTML dashboard to `config.schedule.boardPath` per
+`reference/dashboard.md` (the shared render procedure - same one the on-demand
+`board` skill uses). Overwrite in place; a visible file. Scheduled runs are
+non-interactive, so this is the durable place the user looks between runs. Each
+run rebuilds the whole board from the ledger into the five tabs (Board / Shipped /
+Waiting on Others / Tomorrow's Headlines / History), so chase-in slips, drift
+flags, and handoff follow-ups all land on it, each card carrying its
+`verifyStatus` chip + `source.url` + record link.
 
-- the **chase-in** board (slipping promises, tiered),
-- **drift** flags (stalled / no-due),
-- **handoff follow-ups** the user is driving,
+This is an INTERNAL board, so source links belong here - the radiate-out
+no-internal-links rule is customer-facing only and does not apply. If `boardPath`
+is unset, skip the file and only print to chat.
 
-each line linking to its `source.url`. This is an INTERNAL board, so source
-links belong here - the radiate-out no-internal-links rule is customer-facing
-only and does not apply. If `boardPath` is unset, skip the file and only print
-to chat.
-
-The board is a generated VIEW, never a second store: link, never paste raw
-feeds.
+The board is a generated VIEW, never a second store: regenerated from the ledger
+each run (no hand-maintained board state); link, never paste raw feeds.
 
 ## Guardrails
 

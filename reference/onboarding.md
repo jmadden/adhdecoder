@@ -100,6 +100,7 @@ calls to sources (presence-only).
 - "what's drifting / gone quiet" -> drift
 - "panic" / "I'm overwhelmed" -> panic
 - "where do things stand for <context>" -> radiate-out
+- "show my board" / "refresh the dashboard" -> board
 - "is this still open / reconcile this" -> reconcile
 - "<someone> owes me <X> by <date>" / replying to an ask -> set-the-clock
 - "run a sweep" / "daily run" -> sweep / daily-run

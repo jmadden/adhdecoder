@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADHDecoder Board</title>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2230; --muted:#6b7280;
+    --line:#e6e8ec; --accent:#3b6ef5; --accent-soft:#eaf0ff;
+    --flag:#b4540a; --flag-soft:#fdf1e6; --good:#0f8a5f; --good-soft:#e8f6ef;
+    --wait:#7458e0; --wait-soft:#efeafd;
+    --watch:#8a8f98;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:28px 20px 60px;}
+  .wrap{max-width:1040px;margin:0 auto;}
+  header.top{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;}
+  h1{font-size:22px;letter-spacing:.5px;margin:0;}
+  .sub{color:var(--muted);font-size:13px;}
+  .counts{color:var(--muted);font-size:13px;margin:6px 0 14px;}
+  .counts b{color:var(--ink);}
+  .tabs{display:flex;gap:4px;margin:10px 0 22px;border-bottom:2px solid var(--line);flex-wrap:wrap;}
+  .tabbtn{appearance:none;background:none;border:none;font:inherit;font-weight:600;font-size:14px;
+    color:var(--muted);padding:8px 14px;cursor:pointer;border-bottom:3px solid transparent;
+    margin-bottom:-2px;display:inline-flex;align-items:center;gap:7px;}
+  .tabbtn:hover{color:var(--ink);}
+  .tabbtn.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tbadge{background:#eef0f3;color:var(--muted);border-radius:20px;font-size:11px;padding:1px 8px;font-weight:700;}
+  .tabbtn.active .tbadge{background:var(--accent-soft);color:var(--accent);}
+  .pane{display:none;}
+  .pane.active{display:block;}
+  .pane-note{color:var(--muted);font-size:12px;margin:0 0 14px;}
+  h2.section{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);
+    margin:30px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  .pane h2.section:first-child{margin-top:6px;}
+  .today{display:grid;gap:14px;}
+  .big{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(20,30,60,.04);}
+  .big .step{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);
+    background:var(--accent-soft);border-radius:20px;padding:2px 10px;margin-bottom:8px;}
+  .big h3{margin:0 0 6px;font-size:17px;}
+  .big .do{margin:8px 0 0;padding:10px 12px;background:#fafbff;border:1px dashed #cdd8f7;border-radius:8px;}
+  .big .do b{color:var(--accent);}
+  .big.waiting{border-left-color:var(--wait);}
+  .big.waiting .step{color:var(--wait);background:var(--wait-soft);}
+  .big.waiting .do b{color:var(--wait);}
+  .big.done{border-left-color:var(--good);}
+  .big.done .step{color:var(--good);background:var(--good-soft);}
+  .big.done .do b{color:var(--good);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;}
+  .card h4{margin:0 0 4px;font-size:15px;}
+  .card .who{color:var(--muted);font-size:13px;margin:0 0 8px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{font-size:11px;font-weight:600;border-radius:20px;padding:2px 9px;}
+  .c-task{background:var(--good-soft);color:var(--good);}
+  .c-need{background:#eef0f3;color:var(--muted);}
+  .c-flag{background:var(--flag-soft);color:var(--flag);}
+  .c-cust{background:#eef2ff;color:#3550b0;}
+  .links{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);
+    display:flex;gap:16px;flex-wrap:wrap;font-size:13px;}
+  .links a{color:var(--accent);text-decoration:none;font-weight:600;}
+  .links a:hover{text-decoration:underline;}
+  .links a.task{color:var(--good);}
+  .big .links{border-top:1px dashed #cdd8f7;}
+  details{margin-top:6px;}
+  summary{cursor:pointer;color:var(--muted);font-size:13px;}
+  .watch{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+  .wrow{background:#eef0f3;color:var(--watch);border-radius:8px;padding:8px 11px;font-size:13px;
+    display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;}
+  .wrow a{color:var(--accent);text-decoration:none;font-weight:600;font-size:12px;}
+  .wins{display:flex;flex-direction:column;gap:6px;}
+  .win{background:var(--good-soft);border:1px solid #cfe7da;border-radius:8px;padding:8px 12px;
+    font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .win .wd{color:var(--good);font-weight:700;font-size:12px;min-width:56px;}
+  .win .wc{color:var(--muted);font-size:12px;margin-left:auto;}
+  .win a{color:var(--accent);text-decoration:none;font-weight:600;font-size:12px;}
+  .winmore{color:var(--muted);font-size:12px;margin-top:2px;}
+  .waitlist{display:flex;flex-direction:column;gap:8px;}
+  .waitrow{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px;
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .waitrow .ww{color:var(--ink);font-weight:700;font-size:13px;min-width:150px;}
+  .waitrow .since{color:var(--muted);font-size:12px;}
+  .waitrow .wl{margin-left:auto;}
+  .waitrow a{color:var(--accent);text-decoration:none;font-weight:600;font-size:12px;}
+  .legend{margin-top:26px;color:var(--muted);font-size:12px;display:flex;gap:14px;flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .calm{margin:0 0 4px;padding:12px 14px;background:#eef6f1;border:1px solid #cfe7da;border-radius:10px;color:#0f6b49;font-size:14px;}
+  .histlist{display:flex;flex-direction:column;gap:8px;}
+  .hist{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .hist>summary{cursor:pointer;list-style:none;padding:12px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .hist>summary::-webkit-details-marker{display:none;}
+  .hist>summary::before{content:"▸";color:var(--muted);font-size:13px;line-height:1;transition:transform .15s;}
+  .hist[open]>summary::before{transform:rotate(90deg);}
+  .hist>summary:hover{background:#fafbfc;}
+  .hist .hdate{color:var(--good);font-weight:700;font-size:12px;min-width:50px;}
+  .hist .htitle{font-weight:600;font-size:14px;color:var(--ink);flex:1;min-width:180px;}
+  .hist .hbody{padding:4px 16px 16px 16px;border-top:1px solid var(--line);font-size:14px;}
+  .hist .hbody .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin:13px 0 3px;}
+  .hist .hbody p{margin:0 0 4px;}
+  .hist .hbody ul{margin:4px 0 0;padding-left:20px;}
+  .hist .hbody li{margin-bottom:3px;}
+  .hist .hbody .links{margin-top:13px;padding-top:10px;border-top:1px solid var(--line);display:flex;gap:16px;flex-wrap:wrap;font-size:13px;}
+  .hist .hbody .links a{color:var(--accent);text-decoration:none;font-weight:600;}
+  .hist .hbody .links a:hover{text-decoration:underline;}
+  .hist .hbody .links a.task{color:var(--good);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>ADHDECODER BOARD</h1>
+    <div class="sub">Last swept: <b>{{LAST_SWEPT}}</b></div>
+  </header>
+  <div class="counts">{{COUNTS}}</div>
+  <nav class="tabs">
+    <button class="tabbtn active" data-pane="pane-board">Board</button>
+    <button class="tabbtn" data-pane="pane-shipped">Shipped <span class="tbadge">{{N_SHIPPED}}</span></button>
+    <button class="tabbtn" data-pane="pane-waiting">Waiting on Others <span class="tbadge">{{N_WAITING}}</span></button>
+    <button class="tabbtn" data-pane="pane-tomorrow">Tomorrow's Headlines <span class="tbadge">{{N_TOMORROW}}</span></button>
+    <button class="tabbtn" data-pane="pane-history">History <span class="tbadge">{{N_HISTORY}}</span></button>
+  </nav>
+
+  <div class="pane active" id="pane-board">
+    <div class="calm">{{BOARD_NOTE}}</div>
+    <h2 class="section">Today</h2>
+    <div class="legend" style="margin-top:0;margin-bottom:14px">
+      <span><span class="dot" style="background:var(--accent)"></span> Blue = your move</span>
+      <span><span class="dot" style="background:var(--wait)"></span> Purple = waiting, no clear action</span>
+      <span><span class="dot" style="background:var(--good)"></span> Green = done</span>
+      <span><span class="dot" style="background:var(--flag)"></span> Orange = flag</span>
+    </div>
+    <div class="today"><!-- RENDER today cards here (.big / .big.waiting / .big.done) --></div>
+  </div>
+
+  <div class="pane" id="pane-shipped"><div class="wins"><!-- RENDER .win rows here --></div></div>
+  <div class="pane" id="pane-waiting"><div class="waitlist"><!-- RENDER .waitrow rows here --></div></div>
+  <div class="pane" id="pane-tomorrow"><div class="today"><!-- RENDER upcoming .big cards here --></div></div>
+  <div class="pane" id="pane-history"><div class="histlist"><!-- RENDER .hist details cards here --></div></div>
+
+</div>
+
+<!--
+  CARD TEMPLATES - the renderer emits these from the ledger. EVERY value comes
+  from the user's own ledger + config; this template stores NO data.
+
+  Today card (state class: default = your move / blue; add .waiting = purple; add .done = green):
+    <div class="big">
+      <span class="step">your move - SHORT_STATE_NOTE</span>
+      <h3>WHAT</h3>
+      <div class="chips" style="margin-bottom:6px">
+        <span class="chip c-cust">CONTEXT</span>
+        <span class="chip c-flag">FLAG_ONLY_IF_REAL</span>
+        <span class="chip c-task">VERIFY_STATUS</span>
+      </div>
+      <div class="do"><b>First action:</b> ONE_SMALL_NEXT_MOVE</div>
+      <div class="links">
+        <a href="SOURCE_URL" target="_blank">source</a>
+        <a class="task" href="RECORD_LINK">record</a>
+      </div>
+    </div>
+
+  Waiting-on-Others row:
+    <div class="waitrow"><span class="ww">WHAT</span><span class="since">OWNER - N days waiting</span><span class="wl"><a href="SOURCE_URL">source</a></span></div>
+
+  Shipped win:
+    <div class="win"><span class="wd">DATE</span><span>WHAT</span><span class="wc">CONTEXT</span><a href="SOURCE_URL">source</a></div>
+
+  History card:
+    <details class="hist"><summary><span class="hdate">DATE</span><span class="htitle">WHAT</span><span class="chip c-cust">CONTEXT</span></summary>
+      <div class="hbody"><div class="lbl">What happened</div><p>SUMMARY_OF_CLOSE</p>
+        <div class="links"><a href="SOURCE_URL" target="_blank">source</a></div></div></details>
+-->
+
+<script>
+  document.querySelectorAll('.tabbtn').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.tabbtn').forEach(function(x){x.classList.remove('active');});
+      document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('active');});
+      b.classList.add('active');
+      document.getElementById(b.dataset.pane).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

@@ -44,6 +44,7 @@ Each capability is a skill; together they close the follow-up loop:
 | 🚨 | **panic**         | mid-spiral, hands you the single next move                 |
 | 🧹 | **sweep**         | pulls promises in from your configured sources             |
 | 🔎 | **reconcile**     | cross-checks against the live source before acting         |
+| 📊 | **board**         | renders your ledger into a multi-tab HTML dashboard        |
 | 🧭 | **setup**         | guided, conversational config builder (no hand-editing)    |
 | 💬 | **help**          | orientation + the command cheat-sheet                      |
 | 🩺 | **doctor**        | read-only health check of your setup                       |
@@ -130,6 +131,7 @@ time, or synced state can conflict).
 - "what's drifting / gone quiet" → **drift**
 - "panic" / "I'm overwhelmed" → **panic**
 - "where do things stand for \<context>" → **radiate-out**
+- "show my board" / "refresh the dashboard" → **board**
 - "is this still open / reconcile this" → **reconcile**
 - "\<someone> owes me \<X> by \<date>" / replying to an ask → **set-the-clock**
 - "run a sweep" / "daily run" → **sweep** / **daily-run**
@@ -143,6 +145,12 @@ honoring `cadence`, every enabled source at least once a day) → reconcile the
 about-to-surface items → update the ledger → refresh a read-only **board file** →
 print a one-line recap. It drafts and updates only; it never auto-sends or
 auto-posts. Full detail in `reference/scheduling.md`.
+
+The board is a multi-tab HTML **dashboard** (Board / Shipped / Waiting on Others /
+Tomorrow's Headlines / History), regenerated from the ledger each run. The repo
+ships a data-free template at `assets/dashboard-template.html`; only the rendered
+output at your `boardPath` holds your data. Ask **"show my board"** or **"refresh
+the dashboard"** any time to re-render it on demand (see `reference/dashboard.md`).
 
 - **Trigger the routine at your `pivots`.** The plugin describes the routine;
   your host scheduler runs it. Add a scheduled task at each time in

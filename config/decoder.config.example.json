@@ -50,7 +50,7 @@
   "schedule": {
     "pivots": ["08:30", "12:30", "16:00"],
     "timezone": "America/Los_Angeles",
-    "boardPath": "<path where the refreshed board file is written each run; unset = print to chat only>"
+    "boardPath": "<path to the HTML dashboard written each run, e.g. ~/Vault/Work/Decoder Board.html; unset = print to chat only>"
   },
 
   "lastSwept": null
