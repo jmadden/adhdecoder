@@ -80,10 +80,16 @@ plus the minimum needed to track and dedup. Everything else it references via
 - **what** — one concrete deliverable. Not "an update."
 - **owner** — a named person/party who owes it. Required to be chaseable.
 - **expectBy** — `YYYY-MM-DD`. Required to be chaseable.
-- **status** — `pending` | `met` | `overdue` | `cleared`.
+- **status** — `pending` | `met` | `overdue` | `cleared` | `promoted`.
   - `overdue` is derived (expectBy < today, not met, AND `deadlineType` is
     `hard`); persist it on write. `soft`/`none` items are never overdue.
   - `cleared` = user dismissed/handled outside the system.
+  - `promoted` = collapsed into a record the active backend now owns (see
+    `reference/promotion.md`); keep the record, set **promotedTo** = the new
+    record's id, and stop serving it from Query as open.
+- **promotedTo** — optional; the id of the record this promise was promoted
+  into. Sweeps match on it to enrich the promoted record instead of
+  resurrecting this one.
 - **stakes** — `high` | `normal`, auto-computed (see method.md). Recompute each
   read; do not hand-edit.
 - **stakesOverride** — `high` | `low` | null. User escape hatch. Wins over auto.

@@ -156,7 +156,10 @@ match it against existing promises **by source ref/key OR by context + topic**
 `expectBy` if the source moved it - never create a second record. Decode as new
 **only if it maps to nothing**. Add newly-decoded ids to `dedup.seen`. A CRM
 record and its linked tracker issue, or a meeting's call record and notes doc,
-are one work item - attach, do not duplicate.
+are one work item - attach, do not duplicate. A match against a record with
+`status: promoted` routes the enrichment to the record its `promotedTo` points
+at (via `itemMeta` for a note-backed store) - never resurrect the collapsed
+record, never create a duplicate (`reference/promotion.md`).
 
 ## Write through the ledger (reality gate applies)
 

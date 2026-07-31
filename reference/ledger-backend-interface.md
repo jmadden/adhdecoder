@@ -35,6 +35,31 @@ this convention only, it never hardcodes a specific adapter's name or internals.
 
 Core branches on `writable` vs `read-only`, not on adapter identity.
 
+## Write mode (how an adapter's capability is selected)
+
+Some adapters can serve both capabilities. Which one is active comes from
+config, never from the adapter's mood:
+
+- `config.ledger.writeMode`: `"readonly"` (default) or `"readwrite"`.
+- `builtin` ignores `writeMode`; it is always writable.
+- An adapter that supports write-back declares **read-only** under `readonly`
+  and **writable** under `readwrite` — but `readwrite` only takes effect when
+  `config.ledger.cutover.singleWriterConfirmed` is `true`. If `writeMode` is
+  `readwrite` without that confirmation, the adapter MUST stay read-only and
+  surface a one-line warning pointing at `reference/cutover.md`. This is the
+  single-writer rule enforced in config: two writers on the same files is how
+  stores corrupt.
+- An adapter that cannot write (or has no write-back implemented) ignores
+  `writeMode` and stays read-only.
+
+**Writes stay deliberate even when writable.** A writable external-store
+backend writes its underlying records only on an explicit user action in the
+conversation (mark met, approve a promotion draft, approve a field update).
+Non-interactive runs (`daily-run`, sweeps) never write an external store's
+records regardless of `writeMode`; they write only `state.json` and the board.
+See `reference/cutover.md` for the flip procedure and
+`reference/promotion.md` for the create-on-promotion flow.
+
 ## Operations (the contract core calls)
 
 - **locate()** — resolve where the ledger lives, from config.
@@ -47,6 +72,14 @@ Core branches on `writable` vs `read-only`, not on adapter identity.
 - **write(promise) / update(promise)** — create or update a promise. Writable
   backends only; a read-only backend instead returns a draft/instruction and
   mutates nothing.
+- **markMet(id, completedDate?)** — close a promise as delivered/received.
+  Writable: on the record (an external note-backed store sets its own canonical
+  done fields). Read-only: a draft/instruction, plus bookkeeping in
+  `itemMeta[<id>]`.
+- **promote(promise)** — create a real record in the backend's store from a
+  `state.json`-resident promise, then cross-link the two (see
+  `reference/promotion.md`). Writable backends only, and only ever from an
+  explicit approved draft — never from a sweep.
 
 ## Rule for core skills
 

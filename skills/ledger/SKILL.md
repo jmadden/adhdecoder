@@ -21,8 +21,11 @@ record shape before writing.
    adapter skill `ledger-X` (per `reference/ledger-backend-interface.md`). If no
    `ledger-<X>` skill matches the configured value, it may be a **deprecated
    alias** an adapter still accepts - route to the adapter that declares it and
-   surface its one-line rename note. If a read-only backend adapter is configured, read/Query are served by that adapter; writes stay on the builtin `state.json`
-   companion in v1.
+   surface its one-line rename note. An adapter's capability (writable vs
+   read-only) comes from `config.ledger.writeMode` per
+   `reference/ledger-backend-interface.md`: read/Query are served by the
+   adapter either way; writes go to the adapter only when it is writable,
+   otherwise they stay on the builtin `state.json` companion and become drafts.
 1. Read the instance `config.json` (its path is the configured `instancePath`,
    or ask the user once and remember it). **First-run gate:** if `config.json`
    is absent or unparseable, do not invent paths - route to `setup`
@@ -103,10 +106,19 @@ Then present, grouped and sorted:
 - **Single writer.** Assume one machine writes state; do not design for
   concurrent sweeps.
 - **Stakes are computed**, never hand-edited. Honor `stakesOverride` if set.
-- **Backend-aware, single write path.** Reads honor `config.ledger.backend`. In
-  v1 a read-only backend does not write its underlying records: mark-met / update
-  / flip / note-edit actions produce drafts for the user to apply, never vault
-  writes. ADHDecoder-owned overlay metadata for a read-only note (`snoozedUntil`,
-  `deadlineType` override, verify metadata) is written to the `itemMeta`
-  companion in `state.json`, never into the note. Builtin `state.json` stays the
-  only store ADHDecoder writes.
+- **Backend-aware, single write path.** Reads honor `config.ledger.backend`;
+  writes honor the backend's **capability** (from `config.ledger.writeMode`,
+  see `reference/ledger-backend-interface.md`). Read-only backend: mark-met /
+  update / flip / note-edit actions produce drafts for the user to apply, never
+  record writes; ADHDecoder-owned overlay metadata (`snoozedUntil`,
+  `deadlineType` override, verify metadata) goes to the `itemMeta` companion in
+  `state.json`, never the record. Writable external backend (post-cutover):
+  those same actions write the underlying record via the adapter, but ONLY on
+  an explicit user action in the conversation - non-interactive runs still
+  write only `state.json` and the board. Overlay metadata stays in `itemMeta`
+  either way.
+- **Promote (deliberate).** "Make this a real task" on a `state.json` promise
+  -> follow `reference/promotion.md`: draft the record, get approval, create it
+  via the writable backend's `promote()` (or hand the user the draft when
+  read-only), then collapse the `state.json` record to a cross-reference. Never
+  from a sweep.

@@ -87,6 +87,8 @@ Not sure your setup is sound? Ask **`doctor`** ("check my setup").
 | `storage.knowledgePath` | absolute path to your knowledge vault |
 | `storage.overrides.*` | filenames/dirs: `stateFile`, `radarFile`, `archiveFile`, `tasksDir`, `dashboardFile` |
 | `ledger.backend` | `"builtin"` (default, writes `state.json`) or a note-backed adapter name |
+| `ledger.writeMode` | `"readonly"` (default) or `"readwrite"` (post-cutover only; see below) |
+| `ledger.cutover.singleWriterConfirmed` | your explicit confirmation that nothing else writes the note store; required for `readwrite` |
 | `watchlist.customers` / `.projects` / `.people` | priority entities that raise stakes |
 | `contacts` | per-context channels + people (used by reconcile / sweep) |
 | `sources[].type` | `issues` \| `chat` \| `email` \| `calendar` \| `crm` \| `docs` \| `calls` |
@@ -108,18 +110,23 @@ The plugin talks to storage through an adapter, not a hardcoded location.
   physically present** on the machine that runs sweeps (local disk, Obsidian
   Sync, Syncthing, git, or pinned Dropbox/OneDrive). You set `instancePath` and
   `knowledgePath`.
-- **Connector adapters (later):** for cloud-native stores that serve
-  placeholders instead of real files, reading/writing via the service API.
+- **Connector adapters (spec'd, not yet shipped):** for cloud-native stores
+  that serve placeholders instead of real files, reading/writing via the
+  service API. Contract in `reference/connector-adapters.md`.
 
 **Ledger backend** is a separate axis (`ledger.backend`):
 
-- **`builtin`** (default): the promise store is `state.json` - the only store
-  ADHDecoder writes.
-- **The Obsidian adapter** (optional, read-only): overlay your existing Obsidian
-  notes. Set `ledger.backend: "obsidian"` (any value `X` resolves to a `ledger-X`
-  skill); ADHDecoder never mutates the notes, and its own metadata (snooze,
-  verify results) goes to a `state.json` companion. Ships in `adapters/obsidian/`;
-  see `reference/ledger-backend-interface.md`.
+- **`builtin`** (default): the promise store is `state.json` - always writable.
+- **The Obsidian adapter** (optional): overlay your existing Obsidian notes.
+  Set `ledger.backend: "obsidian"` (any value `X` resolves to a `ledger-X`
+  skill). **Read-only by default:** ADHDecoder never mutates the notes, and its
+  own metadata (snooze, verify results) goes to a `state.json` companion. After
+  a deliberate **cutover** (`reference/cutover.md`: retire your old writer,
+  confirm single-writer, flip `writeMode: "readwrite"`) it also applies your
+  approved actions - mark met, updates, promotions - directly to the notes.
+  Ships in `adapters/obsidian/`; see `reference/ledger-backend-interface.md`.
+  Long-lived sweep-found promises can be **promoted** into real notes, draft
+  first, always with your approval (`reference/promotion.md`).
 
 **Two rules that matter:** 👀 **No hidden files** (everything written is visible,
 never dot-prefixed) and ✍️ **Single writer** (run sweeps on one machine at a

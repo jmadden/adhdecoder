@@ -23,9 +23,11 @@
     }
   },
 
-  "_ledger_comment": "backend selects the promise store. 'builtin' (default) = state.json, the only store ADHDecoder writes. 'obsidian' = the optional read-only Obsidian adapter (adapters/obsidian); it also accepts any deprecated legacy backend value as an alias.",
+  "_ledger_comment": "backend selects the promise store. 'builtin' (default) = state.json, always writable. 'obsidian' = the optional Obsidian adapter (adapters/obsidian); it also accepts any deprecated legacy backend value as an alias. writeMode: 'readonly' (default) = an adapter never writes its underlying records (actions become drafts); 'readwrite' = the adapter writes them on explicit user actions, ONLY valid after cutover with singleWriterConfirmed true (see reference/cutover.md). Leave writeMode readonly until you deliberately cut over.",
   "ledger": {
-    "backend": "builtin"
+    "backend": "builtin",
+    "writeMode": "readonly",
+    "cutover": { "singleWriterConfirmed": false, "date": null }
   },
 
   "watchlist": {

@@ -42,7 +42,17 @@ Run each and report OK or a gap. Match field names to
      note backend needs `storage.knowledgePath` + `storage.overrides.tasksDir`).
    - Gap -> "backend `<X>` has no `ledger-<X>` skill -> install it or set backend
      to `builtin`," or "state dir not writable -> fix the path / permissions."
-3. **Connectors present.** For each `sources[].enabled: true`, the mapped
+3. **Write mode coherent** (`reference/ledger-backend-interface.md`).
+   - `ledger.writeMode` absent or `readonly` -> OK (default).
+   - `readwrite` + `ledger.cutover.singleWriterConfirmed: true` -> OK; report
+     the backend as **writable (post-cutover)** and remind once: "confirm no
+     other automation still writes these files."
+   - `readwrite` WITHOUT the confirmation -> gap: "writeMode is readwrite but
+     cutover isn't confirmed - the backend stays read-only. Follow
+     `reference/cutover.md`, or set writeMode back to readonly."
+   - `readwrite` on `builtin` -> harmless; note it is ignored (builtin is
+     always writable).
+4. **Connectors present.** For each `sources[].enabled: true`, the mapped
    `~~category` connector (per `CONNECTORS.md`) is available in the session.
    `~~knowledge` is validated as a filesystem path (`storage.knowledgePath`), not
    a connector.

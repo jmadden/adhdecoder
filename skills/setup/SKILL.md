@@ -58,11 +58,18 @@ nothing** (the plugin's ADHD ethos). Idempotent - safe to re-run.
    Auto-detect from a connector where possible, but always show it and confirm.
 4. **Storage / backend.** Default `ledger.backend: "builtin"` (writes
    `state.json`) - nothing more needed. Ask "do you already keep tasks as notes
-   in a folder?" If yes, offer the optional read-only note-backed adapter:
+   in a folder?" If yes, offer the optional note-backed adapter:
    collect `storage.knowledgePath` + `storage.overrides.tasksDir` and set
    `ledger.backend` to the adapter name (resolved as `ledger-<backend>`, per
    `reference/ledger-backend-interface.md`). Only offer a backend whose
-   `ledger-<backend>` skill is present.
+   `ledger-<backend>` skill is present. Default `ledger.writeMode: "readonly"`
+   and do NOT offer readwrite during first-time setup - cutover is a later,
+   deliberate step (`reference/cutover.md`). Only when the user explicitly asks
+   to cut over ("make ADHDecoder the writer", "enable write-back"): confirm the
+   old writer is disabled, restate what they are confirming ("nothing else
+   writes these files anymore"), then set `writeMode: "readwrite"` +
+   `cutover: { singleWriterConfirmed: true, date: <today> }` and point them at
+   `doctor`.
 5. **Schedule + board.** Ask for `schedule.pivots` (run times, e.g.
    `["08:30","12:30","16:00"]`), `schedule.timezone` (IANA), and
    `schedule.boardPath` (where the refreshed board is written each run; leave

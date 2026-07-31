@@ -1,36 +1,46 @@
-# ADHDecoder — Obsidian Adapter (read-only v1) Spec
+# ADHDecoder — Obsidian Adapter Spec
 
 Build input. Drop into the plugin repo as `adapters/obsidian/reference.md`.
-Written 2026-07-27. This is an OPTIONAL ledger backend, not core. The default
-backend stays `state.json`; this one is opt-in for a user who already keeps
-tasks as Markdown notes with YAML frontmatter (the format the Obsidian
-**TaskNotes** plugin writes - that is the note format, not the adapter's name).
+Written 2026-07-27; write-back added 2026-07-31. This is an OPTIONAL ledger
+backend, not core. The default backend stays `state.json`; this one is opt-in
+for a user who already keeps tasks as Markdown notes with YAML frontmatter
+(the format the Obsidian **TaskNotes** plugin writes - that is the note
+format, not the adapter's name).
 
 ## Purpose
 
 Let chase-in / drift / panic run on the user's **real existing tasks** instead
-of a throwaway `state.json`, WITHOUT a second store and WITHOUT modifying any of
-the user's files. Read-only v1: prove ADHDecoder reads real work correctly and
-produces a true board, touching nothing.
+of a throwaway `state.json`, WITHOUT a second store. Two modes:
 
-## Why read-only (v1)
+- **Read-only (default):** prove ADHDecoder reads real work correctly and
+  produces a true board, touching nothing.
+- **Readwrite (post-cutover):** ADHDecoder is the single owner and serves
+  deliberate writes (mark met, approved updates, approved promotions) directly
+  to the notes. Gated hard; see Write-back below and `reference/cutover.md`.
 
-The user's existing Decoder already writes these notes on a schedule. Two
-writers on the same files = conflicts. Read-only means **zero conflict**: the
-existing Decoder keeps maintaining the files, ADHDecoder just reads them. They
-coexist. Write-back is a later, deliberate step at cutover, not now.
+## Why read-only is the default
+
+The user's existing Decoder (or any other writer) may still write these notes
+on a schedule. Two writers on the same files = conflicts. Read-only means
+**zero conflict**: the existing writer keeps maintaining the files, ADHDecoder
+just reads them. They coexist. Write-back activates only at cutover, after the
+old writer is retired and the user confirms single-writer in config.
 
 ## Config
 
 - Ledger backend selector in `config.json`, e.g.
-  `"ledger": { "backend": "obsidian" }` (default `"builtin"` = `state.json`).
+  `"ledger": { "backend": "obsidian", "writeMode": "readonly" }` (default
+  backend `"builtin"` = `state.json`; default `writeMode` `"readonly"`).
   A legacy `"backend": "tasknotes"` is accepted as a **deprecated alias** for
   `obsidian` - the adapter treats it identically and surfaces a one-line rename
   note.
+- Write-back requires BOTH `"writeMode": "readwrite"` AND
+  `"cutover": { "singleWriterConfirmed": true }` in the `ledger` block.
+  `readwrite` without the confirmation stays read-only + one warning.
 - Note location comes from existing config: `storage.knowledgePath` +
   `storage.overrides.tasksDir` (e.g. `.../Work/Tasks/`).
 
-## Read (the only thing it does)
+## Read (the main thing it does)
 
 Enumerate `*.md` in `tasksDir` (skip `Archive/` unless asked). Parse each
 note's frontmatter + body and map to a promise via the ledger interface:
@@ -90,13 +100,35 @@ with `noteOnly: true`. A reconcile-discovered source link is persisted to the
 `itemMeta` companion (never the note) and overlaid at read time. See
 `reference/source-links.md`.
 
-## Never (hard, read-only)
+## Never (hard, read-only mode - the default)
 
 - Never write, create, rename, move, or modify any note or Radar file.
 - Never auto-create notes.
 - When the user acts on a board item ("mark met", "handled", "log an update"),
   produce a **draft / instruction** for the user to apply (or let the existing
-  Decoder handle the write). ADHDecoder writes nothing to the vault in v1.
+  Decoder handle the write). ADHDecoder writes nothing to the vault while
+  read-only.
+
+## Write-back (readwrite mode, post-cutover)
+
+Added 2026-07-31. Gate: `writeMode == "readwrite"` AND
+`cutover.singleWriterConfirmed == true`, else stay read-only and warn once.
+Every write below happens **only from an explicit user action in the
+conversation**; a sweep or non-interactive `daily-run` never writes a note in
+any mode.
+
+| Operation | Note effect |
+|---|---|
+| `markMet(id)` | `status: done`, `completedDate` today, refresh `dateModified`; append `update <ISO> - marked met via ADHDecoder` to the body |
+| `update(promise)` | map changed fields to frontmatter (`due`, `priority`, `status`, `projects`, `customer`, `requester`); refresh `dateModified`; append one `update <ISO> - ...` line. Draft the diff first, write on approval |
+| `promote(promise)` | create a NEW note from an approved promotion draft (see `reference/promotion.md`): canonical TaskNotes frontmatter incl. `tags: [task, ...]`, `status: todo`, `dateCreated`/`dateModified`, `requester`, `due` when known; body opens `> **Summary:**` with a `Report to:` line and the source link |
+| delivery flip | with write-back the flip may (on approval) update the note itself: retitle intent stays, but since renames are forbidden, write the flip as frontmatter/status change + history line, and register the they-owe follow-up per the ledger |
+
+Hard rules: real-YAML round-trip preserving unknown keys and the body verbatim
+(except the appended line); atomic write; never rename/move (path = id); never
+delete; TaskNotes-canonical fields only - `snoozedUntil`, `deadlineType`
+override, verify metadata, enriched source links STAY in the `itemMeta`
+companion even in readwrite.
 
 ## Interface (why the other skills don't change)
 
@@ -108,17 +140,21 @@ swaps; the read-side skills are backend-agnostic.
 
 These notes are mostly the user's own (`i-owe-them`) work. Sweep-found
 `they-owe-me` stalls that the user has NOT promoted to a note must NOT be
-auto-created as notes (guardrail). For v1 they continue to live in the
-builtin `state.json` companion. So with the Obsidian backend active, the board
-is the UNION of: open notes (mostly i-owe) + any `state.json` promises
-(sweep-found they-owe). Full unification is deferred.
+auto-created as notes (guardrail, both modes). They live in the builtin
+`state.json` companion. So with the Obsidian backend active, the board is the
+UNION of: open notes (mostly i-owe) + any `state.json` promises (sweep-found
+they-owe), deduped by source link. Unification happens through **deliberate
+promotion** (`reference/promotion.md`): the user approves a promotion draft,
+readwrite creates the note, and the `state.json` record collapses to a
+cross-reference.
 
-## Coexistence
+## Coexistence and cutover
 
 Read-only => no writer conflict. The existing Decoder keeps running and keeps
 the user covered. Do NOT ask the user to turn off their scheduled Decoder runs
-for this; that only happens later at cutover, when ADHDecoder is at parity and
-becomes the single read-write owner.
+while read-only; that happens at **cutover** (`reference/cutover.md`), when
+ADHDecoder is at parity, the old writer is retired, the user confirms
+single-writer in config, and readwrite activates.
 
 ## Test (do in Cowork, live data)
 

@@ -57,8 +57,9 @@ CONNECTORS.md                 tool-category placeholders (~~category)
 - **Filesystem (built):** real, always-present local files (local, Obsidian
   Sync, Syncthing, git, pinned Dropbox/OneDrive). Set `instancePath` +
   `knowledgePath`.
-- **Connector (later):** cloud-native stores that serve placeholders (Google
-  Drive). Reads/writes via API, not a path.
+- **Connector (spec'd, not shipped):** cloud-native stores that serve
+  placeholders. Reads/writes via connector tools, not a path. Contract:
+  `reference/connector-adapters.md`.
 
 ## Ledger backends
 
@@ -66,13 +67,18 @@ Separate axis from storage adapters. `config.ledger.backend` selects the promise
 store, read via the `ledger` skill's Query so read-side skills are
 backend-agnostic:
 
-- **builtin** (default): `state.json` in the instance layer. The only store
-  ADHDecoder writes.
-- **obsidian:** read-only overlay of the user's Obsidian notes (Markdown + YAML
-  frontmatter). Never writes the note; ADHDecoder-owned metadata (snooze,
-  `deadlineType` override, verify results) goes to the `state.json` `itemMeta`
-  companion keyed by item id. Lives in `adapters/obsidian/`, which also accepts
-  any deprecated legacy backend value as an alias.
+- **builtin** (default): `state.json` in the instance layer. Always writable.
+- **obsidian:** overlay of the user's Obsidian notes (Markdown + YAML
+  frontmatter). **Read-only by default** (`ledger.writeMode: "readonly"`):
+  never writes the note; ADHDecoder-owned metadata (snooze, `deadlineType`
+  override, verify results) goes to the `state.json` `itemMeta` companion keyed
+  by item id. **Write-back post-cutover:** `writeMode: "readwrite"` +
+  `cutover.singleWriterConfirmed: true` makes it writable for deliberate user
+  actions only (mark met, approved updates, approved promotions); sweeps and
+  non-interactive runs never write notes in any mode. See
+  `reference/cutover.md` + `reference/promotion.md`. Lives in
+  `adapters/obsidian/`, which also accepts any deprecated legacy backend value
+  as an alias.
 
 ## What's built
 
@@ -91,11 +97,15 @@ The full loop plus a cross-cutting verification layer. Each is a skill under
 - **reconcile** (cross-cutting): cross-check a promise against its live source
   before any skill chases/publishes. One verification path — chase-in /
   radiate-out / drift / panic / sweep all call it.
-- **ledger-obsidian**: the optional read-only Obsidian backend (in
-  `adapters/obsidian/`, not `skills/`).
+- **ledger-obsidian**: the optional Obsidian backend (in `adapters/obsidian/`,
+  not `skills/`). Read-only by default; write-back gated behind cutover.
 
 Refinements layered on: `why` / `deadlineType` (hard/soft/none) / `snoozedUntil`
-promise fields; handoff follow-ups; delivery-flip (i-owe → they-owe) in reconcile.
+promise fields; handoff follow-ups; delivery-flip (i-owe → they-owe) in
+reconcile; `writeMode`/cutover gating (`reference/cutover.md`); deliberate
+promotion of `state.json` promises into backend records with `promoted`/
+`promotedTo` collapse (`reference/promotion.md`); connector storage adapter
+contract (`reference/connector-adapters.md`, spec only).
 
 When adding sweep/source skills, port the *technique* (how to query a category),
 never the specific ids or rosters.
