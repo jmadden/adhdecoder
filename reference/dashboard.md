@@ -117,6 +117,11 @@ On the Board tab, wrap each non-empty state in its own `.today-group` (with the
 matching `.group-label` + colored dot) and emit that state's `.big` cards into
 the group's `.today-grid`; the per-card `.big` fill is otherwise unchanged.
 
+`.big` cards render at a **uniform fixed size**; the template clips any overflow
+and clicking a card opens its full content in a modal (both handled by the
+template's CSS/JS, no renderer action needed). Emit the card content as normal —
+do not pre-truncate `WHAT` or the action text; the template does the clamping.
+
 Link, never paste raw feeds. Emit into the matching `<!-- RENDER ... -->` point in
 each pane; leave a pane empty (or with a brief "nothing here" line) when it has no
 items.
