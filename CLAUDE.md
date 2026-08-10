@@ -42,6 +42,20 @@ CONNECTORS.md                 tool-category placeholders (~~category)
 - Progressive disclosure: lean `SKILL.md`, detail in `reference/`.
 - Skill `description` frontmatter is third-person with concrete trigger phrases.
 
+## Commits
+
+Conventional Commits. Allowed scopes:
+
+`skills` · `adapters` · `reference` · `config` · `plugin` · `connectors` · `docs`
+
+Repo-specific rules:
+
+- A `plugin.json` version bump that accompanies a skill or reference
+  edit belongs in the SAME commit, not a separate `chore`. The bump is
+  part of shipping that change (see Shipping a change).
+- Never reference instance-layer or knowledge-base content in a commit
+  message. Same hard rule as the code.
+
 ## Hard rules (do not violate)
 
 - **No personal or company data in this repo.** Rosters, ids, channels,
@@ -107,7 +121,7 @@ promotion of `state.json` promises into backend records with `promoted`/
 `promotedTo` collapse (`reference/promotion.md`); connector storage adapter
 contract (`reference/connector-adapters.md`, spec only).
 
-When adding sweep/source skills, port the *technique* (how to query a category),
+When adding sweep/source skills, port the _technique_ (how to query a category),
 never the specific ids or rosters.
 
 ## Shipping a change (gotcha)
@@ -118,5 +132,5 @@ Edits to skills/reference do NOT take effect in an installed instance until:
    version = stale cache served).
 2. Reinstall from the **local path**, not the GitHub marketplace (the
    GitHub-backed marketplace clone can lag): `/plugin marketplace remove
-   adhdecoder` → `/plugin marketplace add <repo path>` → `/plugin install
-   adhdecoder@adhdecoder` → `/reload-plugins`.
+adhdecoder` → `/plugin marketplace add <repo path>` → `/plugin install
+adhdecoder@adhdecoder` → `/reload-plugins`.
