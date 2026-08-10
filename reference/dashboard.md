@@ -63,21 +63,27 @@ from the ledger + config.
 
 | Tab (pane) | Card | Contents |
 |---|---|---|
-| **Board / Today** (`#pane-board .today`) | `.big` | Open promises actionable now. State color by class (below). |
+| **Board / Today** (`#pane-board`) | `.big` in `.today-group` / `.today-grid` | Open promises actionable now, grouped into up-to-three labeled color sections (below), each a 2-column grid. |
 | **Waiting on Others** (`#pane-waiting .waitlist`) | `.waitrow` | Open `they-owe-me` promises. |
 | **Shipped** (`#pane-shipped .wins`) | `.win` | `met` / `cleared` recently. |
 | **Tomorrow's Headlines** (`#pane-tomorrow .today`) | `.big` | Due-soon / scheduled-ahead upcoming items (not yet actionable today). |
 | **History** (`#pane-history .histlist`) | `.hist` | All `met` / `cleared`, newest first. |
 
-**Board / Today state color** (the template's `.big` variants):
+**Board / Today state color** (the template's `.big` variants). The three states
+render as **separate stacked sections**, each a `.today-group` (label + colored
+dot) wrapping a 2-column `.today-grid`. Fixed order top to bottom; **omit any
+section that has no items entirely**:
 
-- **blue** (`.big`, default) = **your move** — an open item where the user owes
-  the next action.
-- **purple** (`.big.waiting`) = **waiting, no clear action** — open but the ball
-  is elsewhere / blocked.
-- **green** (`.big.done`) = **done today** — closed today, shown for the win.
-- **orange** = the `c-flag` chip, added **only when a real flag exists**
-  (high stakes, or hard-`deadlineType` overdue). Never a decorative flag.
+1. **blue** (`.big`, default) = **your move** — an open item where the user owes
+   the next action.
+2. **purple** (`.big.waiting`) = **waiting, no clear action** — open but the ball
+   is elsewhere / blocked.
+3. **green** (`.big.done`) = **done today** — closed today, shown for the win.
+
+Within a section, sort **flagged items first** (those carrying the orange
+`c-flag` chip). **orange** stays the `c-flag` chip, added **only when a real flag
+exists** (high stakes, or hard-`deadlineType` overdue) — never a decorative flag,
+and never a fourth section.
 
 `soft`/`none` deadlineType items are never "overdue"; they surface via drift
 staleness, not as a hard flag.
@@ -106,6 +112,10 @@ Fill each template's tokens from the ledger record. On every card include, per
 - the record / **`noteRef`** in the `record` link (the `.task`-styled link),
 - the **`verifyStatus`** chip (`c-task`), the `context` chip (`c-cust`), and the
   `c-flag` chip only when a real flag exists.
+
+On the Board tab, wrap each non-empty state in its own `.today-group` (with the
+matching `.group-label` + colored dot) and emit that state's `.big` cards into
+the group's `.today-grid`; the per-card `.big` fill is otherwise unchanged.
 
 Link, never paste raw feeds. Emit into the matching `<!-- RENDER ... -->` point in
 each pane; leave a pane empty (or with a brief "nothing here" line) when it has no

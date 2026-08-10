@@ -38,6 +38,12 @@
     margin:30px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px;}
   .pane h2.section:first-child{margin-top:6px;}
   .today{display:grid;gap:14px;}
+  .today-group{margin-bottom:22px;}
+  .today-group:last-child{margin-bottom:0;}
+  .group-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin:0 0 10px;}
+  .today-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start;}
+  @media (max-width:700px){.today-grid{grid-template-columns:1fr;}}
   .big{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--accent);
     border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(20,30,60,.04);}
   .big .step{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);
@@ -135,7 +141,9 @@
       <span><span class="dot" style="background:var(--good)"></span> Green = done</span>
       <span><span class="dot" style="background:var(--flag)"></span> Orange = flag</span>
     </div>
-    <div class="today"><!-- RENDER today cards here (.big / .big.waiting / .big.done) --></div>
+    <!-- RENDER today color groups here: one .today-group per non-empty state,
+         in order Your move (blue) / Waiting (purple) / Done today (green);
+         each group's .big cards go in its .today-grid (2 columns). -->
   </div>
 
   <div class="pane" id="pane-shipped"><div class="wins"><!-- RENDER .win rows here --></div></div>
@@ -148,6 +156,16 @@
 <!--
   CARD TEMPLATES - the renderer emits these from the ledger. EVERY value comes
   from the user's own ledger + config; this template stores NO data.
+
+  Today color group (one per non-empty state; label + dot color per state:
+  var(--accent)/"Your move" blue, var(--wait)/"Waiting, no clear action" purple,
+  var(--good)/"Done today" green). Emit the state's .big cards into its .today-grid:
+    <div class="today-group">
+      <div class="group-label"><span class="dot" style="background:var(--accent)"></span> Your move</div>
+      <div class="today-grid">
+        ... this state's .big cards ...
+      </div>
+    </div>
 
   Today card (state class: default = your move / blue; add .waiting = purple; add .done = green):
     <div class="big">
