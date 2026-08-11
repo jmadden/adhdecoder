@@ -102,9 +102,13 @@ with the reason, never as a confident nudge. See
 `reference/verification-discipline.md`.
 
 - **`verified-open`** -> proceed to Draft the nudge below, as normal.
-- **`resolved`** -> drop from the board; it is done. For a `state.json`-backed
-  promise `reconcile` auto-marks it met. For a read-only-backend promise,
-  surface its "looks done, close it?" draft instead of a nudge.
+- **`resolved`** -> never nudge; it is done. For a `state.json`-backed promise
+  `reconcile` auto-marks it met and it leaves the board. For a promise whose
+  record it cannot write, `reconcile` parks a `markMetDraft` in `itemMeta` and
+  the item moves to the board's **Ready to close** group - it does NOT silently
+  vanish and it does NOT stay in "your move". Dropping it from chase-in without
+  surfacing the draft is how finished work goes on looking outstanding. See
+  `reference/dashboard.md` and `reference/ledger-schema.md`.
 - **`reassigned`** -> drop from the board with a brief note ("reassigned to
   `<new owner>`, removed from your list").
 - **`mis-attributed`** -> withhold the nudge; flag instead: "this names

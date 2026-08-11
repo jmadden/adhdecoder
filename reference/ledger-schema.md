@@ -36,11 +36,36 @@ plus the minimum needed to track and dedup. Everything else it references via
   (silent-reply tracking). Self-expanding, same discipline as `knownChannels`.
 - **dismissedFromBoard** — ids the user killed off the board; never re-surface.
 - **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, verifyStatus,
-  verifyReason, lastVerified, source, noteOnly } }`. Overlay store for items
-  whose canonical record is read-only (a read-only backend), incl. a
-  reconcile-enriched `source` (and `noteOnly` cleared) for such a note. Builtin
-  promises keep these on the record; the companion is never written into a
-  note. The Query overlays it at read time.
+  verifyReason, lastVerified, source, noteOnly, markMetDraft, updateDraft,
+  appliedMarkMet } }`. Overlay store for items whose canonical record is
+  read-only (a read-only backend), incl. a reconcile-enriched `source` (and
+  `noteOnly` cleared) for such a note. Builtin promises keep these on the
+  record; the companion is never written into a note. The Query overlays it at
+  read time.
+
+### Pending-decision fields (`itemMeta`)
+
+A read-only backend cannot apply a decision to the record, so the decision is
+parked here until the user acts. **A parked draft is not a closed item.** These
+fields are written by `reconcile` and read by the board; both sides are
+required, or drafts accumulate invisibly and the board keeps showing finished
+work as open.
+
+- **markMetDraft** — `{ status, completedDate, reason }`. Set when `reconcile`
+  returns `resolved` for an item whose record still reads open. It means "the
+  source says this is done; the record has not caught up." The board MUST
+  surface it in the **Ready to close** group (`reference/dashboard.md`), never
+  as an ordinary open item. Cleared when applied or dismissed.
+- **updateDraft** — `{ <changed fields>, reason, bodyLine }`. A proposed
+  record edit (priority/status/date correction) awaiting approval. Same
+  surfacing rule: visible, never silently held.
+- **appliedMarkMet** — `{ ts, completedDate, reason, backup? }`. Written when a
+  draft is actually applied to the record (readwrite only, `reference/cutover.md`).
+  Replaces `markMetDraft`; keep it as the audit trail of who closed what and why.
+
+Invariant: **no draft is write-only.** If a skill can create one of these, a
+surface must render it. Adding a new draft type means adding its surface in the
+same change.
 
 ## Promise record
 

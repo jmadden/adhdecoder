@@ -51,6 +51,9 @@ A card asserts a fact or an action, so it must carry a fresh verdict:
   a stale or unverified item as a confident action.
 - `unverifiable` renders as **"unverified — confirm"** with the reason, never as
   an asserted next move.
+- `resolved`, or any `itemMeta.markMetDraft` / `updateDraft`, routes the card to
+  the **Ready to close** group (step 3), never to "your move". A parked draft is
+  a pending decision the user has not seen yet, not a closed item.
 
 Reconcile only what is actually being rendered, honoring the TTL cache; never the
 whole ledger.
@@ -63,27 +66,50 @@ from the ledger + config.
 
 | Tab (pane) | Card | Contents |
 |---|---|---|
-| **Board / Today** (`#pane-board`) | `.big` in `.today-group` / `.today-grid` | Open promises actionable now, grouped into up-to-three labeled color sections (below), each a 2-column grid. |
+| **Board / Today** (`#pane-board`) | `.big` in `.today-group` / `.today-grid` | Open promises actionable now, grouped into up-to-four labeled color sections (below), each a 2-column grid. Leads with **Ready to close**. |
 | **Waiting on Others** (`#pane-waiting .waitlist`) | `.waitrow` | Open `they-owe-me` promises. |
 | **Shipped** (`#pane-shipped .wins`) | `.win` | `met` / `cleared` recently. |
 | **Tomorrow's Headlines** (`#pane-tomorrow .today`) | `.big` | Due-soon / scheduled-ahead upcoming items (not yet actionable today). |
 | **History** (`#pane-history .histlist`) | `.hist` | All `met` / `cleared`, newest first. |
 
-**Board / Today state color** (the template's `.big` variants). The three states
+**Board / Today state color** (the template's `.big` variants). The four states
 render as **separate stacked sections**, each a `.today-group` (label + colored
 dot) wrapping a 2-column `.today-grid`. Fixed order top to bottom; **omit any
 section that has no items entirely**:
 
-1. **blue** (`.big`, default) = **your move** — an open item where the user owes
+1. **green** (`.big.done`) = **ready to close** — the record still reads open,
+   but the source says it is done: `verifyStatus` is `resolved`, or `itemMeta`
+   carries a `markMetDraft`. Label the group "Ready to close (confirm)" and put
+   the draft's `reason` in the card body. See below.
+2. **blue** (`.big`, default) = **your move** — an open item where the user owes
    the next action.
-2. **purple** (`.big.waiting`) = **waiting, no clear action** — open but the ball
+3. **purple** (`.big.waiting`) = **waiting, no clear action** — open but the ball
    is elsewhere / blocked.
-3. **green** (`.big.done`) = **done today** — closed today, shown for the win.
+4. **green** (`.big.done`) = **done today** — closed today, shown for the win.
+
+**Ready to close comes first, and it is not optional.** A `resolved` item whose
+record still reads open is the single most trust-destroying thing the board can
+render: the user sees finished work presented as outstanding, and stops
+believing the counts. It must never fall into "your move."
+
+- Render it in its own group, above everything, with the reconcile `reason` as
+  the card body and the source link as proof.
+- The first action is the confirmation itself: "confirm and close" (readwrite),
+  or the exact record edit to apply by hand (readonly).
+- Exclude these from the "need your move" count in `{{COUNTS}}`; count them
+  separately (e.g. "N ready to close"), so the headline number reflects real
+  outstanding work.
+- On a **readonly** backend these accumulate until the user acts, so the group
+  is the only thing standing between a correct ledger and silent drift. If it
+  is non-empty for more than a couple of runs, say so in `{{BOARD_NOTE}}`.
+
+States 1 and 4 share the `.big.done` variant (the template has no fifth colour);
+their **group labels** disambiguate them, so always emit the label.
 
 Within a section, sort **flagged items first** (those carrying the orange
 `c-flag` chip). **orange** stays the `c-flag` chip, added **only when a real flag
 exists** (high stakes, or hard-`deadlineType` overdue) — never a decorative flag,
-and never a fourth section.
+and never a section of its own.
 
 `soft`/`none` deadlineType items are never "overdue"; they surface via drift
 staleness, not as a hard flag.
@@ -93,7 +119,7 @@ staleness, not as a hard flag.
 | Placeholder | Value |
 |---|---|
 | `{{LAST_SWEPT}}` | `lastSwept`, human-readable (e.g. "2h ago" or the date); "never" if null. |
-| `{{COUNTS}}` | one-line tally, e.g. `<b>N</b> need your move, <b>N</b> waiting, <b>N</b> shipped`. |
+| `{{COUNTS}}` | one-line tally, e.g. `<b>N</b> ready to close, <b>N</b> need your move, <b>N</b> waiting, <b>N</b> shipped`. Ready-to-close items are counted separately and excluded from "need your move". |
 | `{{N_SHIPPED}}` | count of Shipped rows. |
 | `{{N_WAITING}}` | count of Waiting-on-Others rows. |
 | `{{N_TOMORROW}}` | count of Tomorrow cards. |

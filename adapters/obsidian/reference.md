@@ -109,6 +109,20 @@ with `noteOnly: true`. A reconcile-discovered source link is persisted to the
   Decoder handle the write). ADHDecoder writes nothing to the vault while
   read-only.
 
+**Drafts must be persisted AND surfaced.** A mark-met or update draft goes to
+the `state.json` `itemMeta` companion as `markMetDraft` / `updateDraft` (never
+into the note), and the board renders it in the **Ready to close** group until
+the user acts. In read-only mode these accumulate by design - that is the whole
+point of the mode - so the group is the only thing keeping the note store and
+reality from drifting apart. A draft that is written but never rendered is a
+silent regression: the note still says `todo`, the board still paints it as the
+user's move, and completed work looks outstanding for as long as nobody asks.
+See `reference/ledger-schema.md` and `reference/dashboard.md`.
+
+On apply (readwrite), replace `markMetDraft` with **`appliedMarkMet`**
+(`{ ts, completedDate, reason }`) so the companion keeps the audit trail of what
+was closed and why.
+
 ## Write-back (readwrite mode, post-cutover)
 
 Added 2026-07-31. Gate: `writeMode == "readwrite"` AND

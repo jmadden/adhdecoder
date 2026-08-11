@@ -153,9 +153,16 @@ source itself looks fine.
 - **`resolved`** -> for a `state.json`-backed promise, mark it `met` via the
   `ledger` skill (background bookkeeping on ADHDecoder's own store - the same
   spirit as `sweep`'s silent enrich/update), with a history line noting it was
-  auto-resolved via reconciliation. For a **read-only-backend** promise, do
-  **not** write the note - surface "this looks done, close it?" as a draft/
-  instruction for the user (or their existing Decoder) to apply.
+  auto-resolved via reconciliation. For a promise whose record this cannot
+  write, do **not** write the record - persist a **`markMetDraft`**
+  (`{ status, completedDate, reason }`) to the `itemMeta` companion, keyed by
+  item id, per `reference/ledger-schema.md`.
+
+  **Parking a draft is not closing an item.** The draft is a pending decision
+  the user has not seen yet, so the board renders it in the **Ready to close**
+  group (`reference/dashboard.md`) until they act. Never park one without that
+  surface: a write-only draft means finished work keeps rendering as
+  outstanding, and the board stops being believable.
 - **`reassigned`** -> record the new owner (state.json backend only) with a
   history note; drop it from the user's chase list with a brief note
   explaining why. For a read-only backend, surface the same as an instruction, no write.

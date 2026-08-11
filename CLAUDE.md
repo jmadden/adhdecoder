@@ -119,7 +119,14 @@ promise fields; handoff follow-ups; delivery-flip (i-owe → they-owe) in
 reconcile; `writeMode`/cutover gating (`reference/cutover.md`); deliberate
 promotion of `state.json` promises into backend records with `promoted`/
 `promotedTo` collapse (`reference/promotion.md`); connector storage adapter
-contract (`reference/connector-adapters.md`, spec only).
+contract (`reference/connector-adapters.md`, spec only); `markMetDraft` /
+`updateDraft` / `appliedMarkMet` in `itemMeta` plus the board's **Ready to
+close** group, so a parked decision is always visible.
+
+**No write-only drafts.** If a skill can park a pending decision in `itemMeta`,
+a surface must render it, in the same change. A draft nothing displays is
+invisible drift: the record keeps reading open, the board keeps showing
+finished work as the user's move, and the counts stop being trustworthy.
 
 When adding sweep/source skills, port the _technique_ (how to query a category),
 never the specific ids or rosters.
