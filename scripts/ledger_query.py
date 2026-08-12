@@ -157,6 +157,32 @@ def split_frontmatter(text):
     raise ValueError("no closing --- on frontmatter")
 
 
+def duplicate_frontmatter_keys(frontmatter_text):
+    """Top-level keys that appear more than once in one frontmatter block.
+
+    A real YAML parser accepts a duplicate key and keeps the LAST value, so a
+    note carrying two `dateModified` lines parses cleanly while quietly
+    discarding one of them. Nothing downstream can tell, which makes it the same
+    class of invisible damage as a note that fails to parse: it is not wrong
+    enough to fail, so it is never mentioned.
+
+    Detected by scanning lines rather than asking the parser, because by the time
+    the parser is done the evidence is gone. Top-level only (a key at column 0),
+    since nested duplicates need the parse tree to locate meaningfully.
+    """
+    seen = {}
+    for line in frontmatter_text.splitlines():
+        if not line or line[0].isspace() or line.lstrip().startswith("#"):
+            continue
+        key, sep, _ = line.partition(":")
+        if not sep:
+            continue
+        key = key.strip()
+        if key:
+            seen[key] = seen.get(key, 0) + 1
+    return sorted(key for key, count in seen.items() if count > 1)
+
+
 def infer_direction(title):
     lowered = (title or "").lower()
     for hint in THEY_OWE_HINTS:
@@ -224,6 +250,7 @@ def read_notes(config):
             )
             continue
 
+        duplicates = duplicate_frontmatter_keys(frontmatter_text)
         note_status = str(frontmatter.get("status") or "todo").strip().lower()
         due = as_date(frontmatter.get("due"))
         scheduled = as_date(frontmatter.get("scheduled"))
@@ -274,6 +301,20 @@ def read_notes(config):
                 "deadlineType": deadline_type,
                 "snoozedUntil": None,
                 "history": history,
+                # a duplicate key parsed cleanly but discarded a value; surface it
+                # as a lint on a record that parsed, never as a silent success
+                "frontmatterWarning": (
+                    "duplicate frontmatter key(s): %s - the last value wins and the "
+                    "earlier one is discarded" % ", ".join(duplicates)
+                    if duplicates
+                    else None
+                ),
+                "_structuralWarning": (
+                    "duplicate frontmatter key(s): %s - the last value wins and the "
+                    "earlier one is discarded" % ", ".join(duplicates)
+                    if duplicates
+                    else None
+                ),
                 "_origin": "note",
                 "_noteStatus": note_status,
             }
@@ -495,6 +536,15 @@ def query(config, now):
                 promise[field] = meta[field]
         if isinstance(meta.get("source"), dict) and meta["source"].get("url"):
             promise["source"] = meta["source"]
+        # a structural warning is read off the file itself, so an itemMeta warning
+        # must not replace it; both are true and both need saying
+        structural = promise.pop("_structuralWarning", None)
+        if structural:
+            existing = promise.get("frontmatterWarning")
+            promise["frontmatterWarning"] = (
+                structural if not existing or existing == structural
+                else "%s; %s" % (structural, existing)
+            )
         promise["_dismissed"] = (
             promise["id"] in dismissed_ids or bool(meta.get("dismissedFromBoard"))
         )

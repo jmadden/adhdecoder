@@ -83,6 +83,20 @@ So, on every read that enumerates `tasksDir`:
   rewrite of a file the user did not ask you to touch is worse than the bug.
   Report the file and the one-line fix; let the user apply it.
 
+**Duplicate keys parse, and that is the problem (fix, 2026-08-12).** A note
+carrying the same top-level key twice (found in the wild: two `dateModified`
+lines in one block) is accepted by a real YAML parser, which keeps the **last**
+value and discards the earlier one without complaint. So it is not a parse
+failure, it produces a promise, it lands on the board, and nothing anywhere
+indicates that a value was thrown away. That is the same invisible damage as a
+note that fails to parse, wearing a clean result.
+
+`scripts/ledger_query.py` scans the raw frontmatter block for repeated
+top-level keys before handing it to the parser (afterwards the evidence is
+gone) and attaches a `frontmatterWarning`. It is a lint, not a failure: the note
+still parses and still appears. Report it, never repair it, and never let an
+`itemMeta` warning overwrite it - both can be true about the same note.
+
 **No-due staleness fallback (fix, 2026-07-27).** On real data ~60% of open
 notes have no `due` date, many of them blocked / high-priority (the
 silent-rot zone). Date-based chasing misses all of them. So for an OPEN promise

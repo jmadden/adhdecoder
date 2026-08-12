@@ -178,13 +178,26 @@ def main():
             "parse failures ride along with every query",
         )
         check(
-            payload["frontmatterWarnings"]
-            and payload["frontmatterWarnings"][0]["file"].startswith("Follow up with Beta"),
+            "Follow up with Beta Co on the SSO answer.md"
+            in {w["file"] for w in payload["frontmatterWarnings"]},
             "frontmatter warnings ride along with every query",
         )
         check(
             payload["collapsed"] and payload["collapsed"][0]["id"].startswith("ISSUE-123"),
             "cross-store collapses ride along with every query",
+        )
+
+        # --- a duplicate key parses cleanly but must not pass silently -----
+        warned = {w["file"]: w["warning"] for w in payload["frontmatterWarnings"]}
+        check(
+            "Draft the Xi migration summary.md" in warned
+            and "duplicate frontmatter key(s): dateModified" in warned["Draft the Xi migration summary.md"],
+            "a duplicate frontmatter key is surfaced (a real YAML parser keeps the "
+            "last value and discards the other, silently)",
+        )
+        check(
+            "Draft the Xi migration summary" in whats(q(config_path, "open")),
+            "the duplicate-key note still parses and still appears (a lint, not a failure)",
         )
 
         # --- unknown selector fails loudly ---------------------------------

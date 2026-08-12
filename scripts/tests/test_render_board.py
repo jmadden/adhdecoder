@@ -169,12 +169,12 @@ def main():
             "the board note counts the dismissed items a draft revived",
         )
         check(
-            "<b>2</b> ready to close, <b>4</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
+            "<b>2</b> ready to close, <b>5</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
             in html,
             "counts split ready-to-close out of need-your-move",
         )
         check(
-            "4 items need your move" in html and "2 notes could not be parsed and are not" in html,
+            "5 items need your move" in html and "2 notes could not be parsed and are not" in html,
             "the board note agrees in number",
         )
         check(
@@ -263,8 +263,11 @@ def main():
             "promise.relatedRefs renders beside the source link",
         )
         check(
-            "1 record carries a frontmatter warning: Follow up with Beta Co" in html,
-            "itemMeta.frontmatterWarning reaches the board note",
+            "2 records carry a frontmatter warning:" in html
+            and "Follow up with Beta Co on the SSO answer.md" in html
+            and "Draft the Xi migration summary.md" in html,
+            "both an itemMeta warning and a structural duplicate-key warning reach "
+            "the board note",
         )
         check(
             "frontmatter warning: Follow up with Beta Co" in stdout,
