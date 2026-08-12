@@ -73,15 +73,56 @@ Run each and report OK or a gap. Match field names to
      work indefinitely. Report it here or it goes unreported.
    - Validate, never repair (repair is the user's call, or `setup`'s).
 
+6. **Schema integrity** (`reference/ledger-schema.md`). Run the validator rather
+   than eyeballing the file:
+
+   ```
+   python3 <plugin-root>/scripts/validate-state.py --config <instance config.json>
+   ```
+
+   It reports the declared `schemaVersion`, then every field the schema does not
+   define, at all three levels (top level / promise record / itemMeta entry):
+   - **unknown key -> a gap.** A field no schema version defines is a run that
+     invented vocabulary. Report it with "name it in `ledger-schema.md` or remove
+     it by hand."
+   - **deprecated key -> a note** naming its replacement (e.g. `createdAt` ->
+     `created`). Not a gap: an old file is old, not broken.
+   - Exit status is 1 when gaps exist, 0 when only notes do.
+
+   This check exists because the schema was prose, so each session invented its
+   own names and two fields ended up meaning "this note is malformed" under
+   different spellings. One of them was written and never read: a run recorded a
+   damaged note and nothing surfaced it for weeks.
+   - **Validate, never repair.** Do not rename a field, do not remove one, and
+     do not bump `schemaVersion`. Report the edit; the user applies it.
+
+7. **Suppressions and sweep results** (`state.json`). Both are run-level facts no
+   board renders, so this is their surface. The **mechanical** half is in the same
+   validator run as check 6: a `suppressed` entry with no `reason` reports as a
+   gap, and a malformed or over-cap `sweepLog` reports as a note. Relay those.
+
+   The **reading** half is yours, and it is why this check is not only code:
+   - Report each suppression's `reason` in one line, so a suppressed ref stays
+     accountable rather than becoming permanent by default.
+   - Read the most recent `sweepLog` entry's per-source results and say whether
+     any source is **responding but returning nothing**. A presence-only
+     connector check (check 4) scores such a source OK, so this is the only place
+     it surfaces. Judging it needs to know what that source's silence means (a
+     quiet day versus a broken query), which is a reading task, not a
+     mechanical one: compare against the surrounding runs and say which it looks
+     like rather than asserting a fault.
+
 ## Report shape
 
 A short list: each check as **OK** or a **gap** with its one-line fix, most
-important first (config -> backend -> record-store integrity -> connectors). If
+important first (config -> backend -> record-store integrity -> schema ->
+connectors -> suppressions/sweep results). If
 everything passes, say so plainly and point at a first "what's slipping." If
 config is entirely missing, skip straight to "run `setup`."
 
 ## Guardrails
 
 - Read-only. Writes no config/state, makes no live source calls, sends nothing.
-- No invented fields; validate only what the config template defines.
+- No invented fields; validate only what the config template and
+  `reference/ledger-schema.md` define.
 - Advisor by default: report and prescribe the fix; let `setup` apply it.

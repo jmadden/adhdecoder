@@ -24,6 +24,9 @@
       "deadlineType": "hard",
       "snoozedUntil": null,
       "driftClearedUntil": null,
+      "note": "Finance replied on the 9th asking which cost centre owns the split, and nobody has answered them yet.",
+      "relatedRefs": ["ISSUE-790"],
+      "createdAt": "2026-07-31T10:00:00-07:00",
       "history": [{ "ts": "2026-07-31T10:00:00-07:00", "note": "Promise captured." }]
     },
     {
@@ -105,6 +108,26 @@
   "knownChannels": [],
   "watchedThreads": [],
   "dismissedFromBoard": ["Tasks/Spec the header passthrough for Gamma.md"],
+  "suppressed": [
+    {
+      "ref": "ISSUE-000",
+      "recordId": "rec-000",
+      "source": "issues",
+      "context": "Sigma Partners",
+      "reason": "Self-created by an earlier run; Sigma is not a customer."
+    }
+  ],
+  "people": {
+    "B. Person": {
+      "pronouns": "they/them",
+      "note": "Recorded after a run guessed wrong.",
+      "recordedAt": "2026-08-10T13:30:00-07:00"
+    }
+  },
+  "sweepLog": [
+    { "ts": "2026-08-12T06:00:00-07:00", "sources": { "issues(tracker)": "ok", "email(mail)": "ok" } }
+  ],
+  "unknownTopLevelField": "a field no schema version defines",
   "itemMeta": {
     "Tasks/Spec the header passthrough for Gamma.md": {
       "verifyStatus": "resolved",
@@ -142,6 +165,18 @@
       "verifyStatus": "unverifiable",
       "verifyReason": "Tracker returned no matching issue.",
       "lastVerified": "2026-08-11T10:00:00-07:00"
+    },
+    "Tasks/Maintain the Nu integration inventory.md": {
+      "verifyStatus": "verified-open",
+      "lastVerified": "2026-08-11T10:00:00-07:00",
+      "deadlineTypeReason": "The due date was the original kickoff, not a live commitment; this is ongoing upkeep.",
+      "resolvedNotDropped": true
+    },
+    "Tasks/Follow up with Beta Co on the SSO answer.md": {
+      "verifyStatus": "verified-open",
+      "lastVerified": "2026-08-11T10:00:00-07:00",
+      "frontmatterWarning": "priority: medium but the note body calls this urgent",
+      "inventedOverlayField": "a field no schema version defines"
     }
   }
 }

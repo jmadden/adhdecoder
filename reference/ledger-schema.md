@@ -11,18 +11,25 @@ plus the minimum needed to track and dedup. Everything else it references via
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "lastSwept": null,
   "promises": [],
   "dedup": { "seen": [] },
   "knownChannels": [],
   "watchedThreads": [],
   "dismissedFromBoard": [],
+  "suppressed": [],
+  "people": {},
+  "sweepLog": [],
   "itemMeta": {}
 }
 ```
 
-- **schemaVersion** — integer, for future migrations.
+- **schemaVersion** — integer, for future migrations. **2** is the version in
+  which every field below is named and the duplicates are deprecated (see
+  Migration). Documentary: nothing branches on it yet, and no automated run may
+  bump it. `validate-state.py` reports the declared version; changing it is a
+  deliberate user action.
 - **lastSwept** — ISO 8601 of the last successful sweep, or null.
 - **promises** — the ledger proper (array of promise records below).
 - **dedup.seen** — ids of items already decoded, so nothing is re-decoded.
@@ -35,9 +42,35 @@ plus the minimum needed to track and dedup. Everything else it references via
   replies since `lastSwept` even when they never re-mention the user
   (silent-reply tracking). Self-expanding, same discipline as `knownChannels`.
 - **dismissedFromBoard** — ids the user killed off the board; never re-surface.
-- **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, verifyStatus,
-  verifyReason, lastVerified, source, noteOnly, markMetDraft, updateDraft,
-  appliedMarkMet } }`. Overlay store for items whose canonical record is
+  Canonical form. An `itemMeta.<id>.dismissedFromBoard: true` means the same
+  thing for one item; Query treats the two as a union (either one dismisses).
+  A pending draft outranks a dismissal, so the board still renders a dismissed
+  item in **Ready to close** (`reference/dashboard.md`) — dismissal means "stop
+  showing me this as work", a draft is an unanswered question about the record.
+- **suppressed** — `{ ref, recordId, source, context, reason }` for source refs
+  the sweep must stop resurfacing at all (a dead lead, a self-created record, a
+  wrong-attribution hit). Distinct from `dismissedFromBoard`: that suppresses a
+  **promise** on the board, this suppresses a **source ref** at sweep time, so
+  no promise is created from it again. Append-only; `reason` is required, since
+  an unexplained suppression is indistinguishable from a bug. Surfaced by
+  `doctor`.
+- **people** — `{ "<name>": { pronouns, note, recordedAt } }`. Facts about a
+  person that ADHDecoder would otherwise get wrong, most importantly
+  **pronouns**. **Any skill writing copy that refers to a person MUST read this
+  first** (`chase-in` nudges, `radiate-out` status, `set-the-clock` prompts, the
+  board's action lines) and must never infer pronouns from a name; where they
+  are unrecorded, use they/them. This map exists because a run wrote the wrong
+  pronoun for a real person and the user had to correct it; a stored correction
+  that nothing reads gets the same thing wrong again next run.
+- **sweepLog** — `{ ts, sources: { "<type>(<provider>)": "<result>" } }` per
+  run, newest last. The record of which sources actually answered, so a source
+  that has quietly returned nothing for days is visible rather than assumed
+  healthy. Cap it (keep the last ~10 runs); it is a log, not a store. Surfaced
+  by `doctor`.
+- **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, deadlineTypeReason,
+  verifyStatus, verifyReason, lastVerified, source, noteOnly, dismissedFromBoard,
+  frontmatterWarning, markMetDraft, updateDraft, appliedMarkMet } }`. Overlay
+  store for items whose canonical record is
   read-only (a read-only backend), incl. a reconcile-enriched `source` (and
   `noteOnly` cleared) for such a note. Builtin promises keep these on the
   record; the companion is never written into a note. The Query overlays it at
@@ -59,13 +92,34 @@ work as open.
 - **updateDraft** — `{ <changed fields>, reason, bodyLine }`. A proposed
   record edit (priority/status/date correction) awaiting approval. Same
   surfacing rule: visible, never silently held.
-- **appliedMarkMet** — `{ ts, completedDate, reason, backup? }`. Written when a
-  draft is actually applied to the record (readwrite only, `reference/cutover.md`).
-  Replaces `markMetDraft`; keep it as the audit trail of who closed what and why.
+- **appliedMarkMet** — `{ ts, completedDate, reason, by?, backup? }`. Written when
+  a draft is actually applied to the record (readwrite only,
+  `reference/cutover.md`). Replaces `markMetDraft`; keep it as the audit trail of
+  who closed what and why. **by** is who applied it (the deprecated `closedBy`
+  lands here), so the audit trail is one object rather than two fields that can
+  disagree.
 
-Invariant: **no draft is write-only.** If a skill can create one of these, a
-surface must render it. Adding a new draft type means adding its surface in the
-same change.
+### Other overlay fields (`itemMeta`)
+
+- **deadlineTypeReason** — why `deadlineType` was overridden (e.g. "the note's
+  `due` was the original working-session date, not a live commitment"). Required
+  whenever a run overrides `deadlineType`, because an unexplained override looks
+  like the system losing a deadline. The board renders it on the card for any
+  item whose date is soft.
+- **frontmatterWarning** — a lint on a record that **parsed**: a non-canonical
+  value, or a field contradicting the title. Surfaced in the board note beside
+  parse failures. Distinct from a parse *failure*, which makes a record
+  invisible and is detected live on every read (never stored, because a stored
+  copy goes stale the moment the file is fixed).
+- **dismissedFromBoard** — per-item form of the top-level list; see above.
+
+Invariant: **no overlay field is write-only.** If a run can write a field here,
+a surface must render it, in the same change that introduces it. This started as
+a rule about drafts and was broadened in schemaVersion 2, because the failure
+mode never depended on the field being a draft: a run recorded a malformed note
+in `itemMeta` and nothing ever surfaced it, so the damaged file was found weeks
+later only by parsing the vault by hand. A field nothing reads is not a record,
+it is a place where a correction goes to die.
 
 ## Promise record
 
@@ -142,7 +196,50 @@ same change.
   kept, never deleted. Distinct from `dismissedFromBoard` (permanent). While in
   the future, consumers do not surface the item as a chase.
 - **driftClearedUntil** — ISO 8601 cooldown after a "handled offline" clear.
+- **note** — string or null. The **latest-state** summary in plain language: what
+  is currently true about this promise ("X emailed on the 5th still waiting on Y,
+  and asked to cancel today's meeting"). Overwritten as reality changes, while
+  every transition also appends to `history`. The two are not duplicates:
+  `history` is the append-only ledger of what happened, `note` is the current
+  situation, and it is the richest per-promise context in the store. The board
+  renders it in the card body.
+- **completedDate** — `YYYY-MM-DD` or null. When the promise actually closed, as
+  distinct from when a run noticed. Drives the Shipped / Done-today grouping and
+  the History date.
+- **relatedRefs** — optional array of other source refs bearing on this promise
+  (a sibling ticket, a superseding issue). Links only; never a second promise.
+  Rendered on the card beside the source link, so a superseding ticket is one
+  click away rather than buried in the record.
 - **history** — append-only log of `{ ts, note }`. Never rewrite prior entries.
+
+## Deprecated fields (schemaVersion 2)
+
+Each of these was invented by a run, duplicates a field that already existed, and
+must not be written again. **Read them where they still exist** (an old file is
+not wrong, it is old); write only the replacement.
+
+| Deprecated | Level | Replacement | Why |
+|---|---|---|---|
+| `createdAt` | promise | `created` | Same fact, two spellings. |
+| `counterparty` | promise | `owner` (+ `note` for the nuance) | Held prose like "Nobody, the assignee is still null", which is situational context, not a party. |
+| `resolvedNotDropped` | itemMeta | `markMetDraft` | An earlier ad-hoc version of Ready-to-close, superseded once the draft fields were specced. |
+| `closedBy` | itemMeta | `appliedMarkMet.by` | Audit info belongs with the rest of the apply record, not beside it. |
+| `recommendation` | itemMeta | `updateDraft` | A proposed record change with no apply path. `updateDraft` is that concept, with a surface. |
+| `parseError` | itemMeta | nothing; detect live | A stored parse failure goes stale the moment the file is fixed, and one sat unread while the damaged note stayed invisible. Parse failures are recomputed on every read and surfaced by the renderer and `doctor`. |
+
+### Migration
+
+There is no automated migration and no run may perform one. `state.json` is the
+user's data and the repo's rule is validate-never-repair, so:
+
+1. `scripts/validate-state.py` (via `doctor`) reports what a file declares and
+   what it contains: unknown keys as gaps, deprecated keys as notes naming the
+   replacement.
+2. The user applies the rename or removal by hand, or asks for a one-off pass.
+3. `schemaVersion` is bumped by that deliberate act, never as a side effect.
+
+A file still declaring `schemaVersion: 1` is served normally. The version records
+which vocabulary the file was written against; it does not gate reads.
 
 ## Reality gate (never create phantom chases)
 

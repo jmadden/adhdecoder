@@ -139,6 +139,17 @@ the ledger's `lastSwept` - so the user knows how current the picture is.
 The user approves and posts (or asks for edits). This skill posts nothing
 itself.
 
+## Naming a person
+
+Before writing any copy that refers to a person, read `state.json`'s **`people`**
+map (`reference/ledger-schema.md`) and use the pronouns recorded there. Where a
+person has none recorded, use they/them; never infer pronouns from a name. If the
+user corrects a pronoun, record it in `people` so the next run does not repeat the
+error, and say that you have.
+
+This map exists because a run wrote the wrong pronoun for a real person. A stored
+correction that nothing reads gets the same thing wrong again.
+
 ## Guardrails
 
 - Never auto-post, never auto-send, never auto-create tasks. Drafts only, in

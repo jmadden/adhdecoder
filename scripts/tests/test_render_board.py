@@ -10,6 +10,7 @@ ledger is invented data (Acme Corp / ISSUE-123 style), per the repo's no
 personal or company data rule.
 """
 
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -91,7 +92,37 @@ def group_block(html, label):
     return html[start:end if end > 0 else len(html)]
 
 
+def check_pronoun_matching():
+    """Unit-check the people lookup directly: getting this wrong misgenders a real
+    person, and the board-level assertions cannot cover the ambiguous cases."""
+    spec = importlib.util.spec_from_file_location("render_board", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    people = {
+        "Robin": {"pronouns": "she/her"},
+        "Robin Vega": {"pronouns": "he/him"},
+        "Sam": {"pronouns": "he/him"},
+        "Jo": {"pronouns": "they/them"},
+        "No Pronouns Recorded": {"note": "deliberately has none"},
+    }
+    cases = [
+        ("Robin Vega (Org)", "he/him", "the longest recorded name wins over a bare first name"),
+        ("Robin (Org)", "she/her", "a bare first name still matches when it is the whole name"),
+        ("Samantha Jones (Org)", None, "a recorded 'Sam' does not match inside 'Samantha'"),
+        ("Sam Okafor", "he/him", "a whole-word first name matches"),
+        ("Jonathan Reyes", None, "a recorded 'Jo' does not match inside 'Jonathan'"),
+        ("Jo Reyes", "they/them", "a two-letter name still matches on a word boundary"),
+        ("Nobody. The assignee is still null.", None, "prose in the owner field matches nobody"),
+        ("No Pronouns Recorded", None, "a person recorded without pronouns gets none invented"),
+        ("", None, "an empty owner matches nobody"),
+        (None, None, "a missing owner matches nobody"),
+    ]
+    for owner, expected, label in cases:
+        check(module.pronouns_for(owner, people) == expected, "pronouns: %s" % label)
+
+
 def main():
+    check_pronoun_matching()
     with tempfile.TemporaryDirectory() as raw_tmp:
         tmp = Path(raw_tmp)
         config_path, board_path, vault = build_instance(tmp)
@@ -208,6 +239,36 @@ def main():
             "two notes citing one ticket both survive (same-store records never collapse)",
         )
 
+        # --- no write-only overlay fields (schemaVersion 2 invariant) -------
+        check(
+            "Nudge B. Person (they/them)." in html,
+            "recorded pronouns from state.json `people` reach the action line",
+        )
+        check(
+            "A. Contact (Acme Corp)." in html and "A. Contact (Acme Corp) (" not in html,
+            "an owner with no recorded pronouns gets no guessed ones",
+        )
+        check(
+            "Finance replied on the 9th asking which cost centre owns the split" in html,
+            "the promise `note` renders in the card body",
+        )
+        check(
+            "<b>Soft date:</b> The due date was the original kickoff" in html,
+            "itemMeta.deadlineTypeReason renders on a soft-date card",
+        )
+        check(
+            '<span class="since">also: ISSUE-790</span>' in html,
+            "promise.relatedRefs renders beside the source link",
+        )
+        check(
+            "1 record carries a frontmatter warning: Follow up with Beta Co" in html,
+            "itemMeta.frontmatterWarning reaches the board note",
+        )
+        check(
+            "frontmatter warning: Follow up with Beta Co" in stdout,
+            "the recap names the frontmatter warning too",
+        )
+
         # --- card contents -------------------------------------------------
         check(html.count('class="chip c-task"') >= 5, "every card carries a verifyStatus chip")
         check(
@@ -222,6 +283,22 @@ def main():
         check("Zeta &amp; Sons" in html or "&amp;" in html, "ledger values are HTML-escaped")
         check("{{" not in html, "no unfilled template tokens remain")
         check("RENDER " not in html, "no injection-point comments remain")
+
+        # --- a half-written ledger is refused, not rendered ----------------
+        good_board = board_path.read_bytes()
+        (tmp / "instance" / "state.json").write_text('{"promises": [')
+        partial = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(config_path), "--now", NOW],
+            capture_output=True, text=True,
+        )
+        check(
+            partial.returncode != 0 and "did not parse" in (partial.stderr + partial.stdout),
+            "a partially-written ledger is refused with a clear message",
+        )
+        check(
+            board_path.read_bytes() == good_board,
+            "the last good board is left untouched when the ledger will not parse",
+        )
 
         # --- guardrail: never writes a note --------------------------------
         mtimes_after = {p: p.stat().st_mtime_ns for p in sorted(vault.rglob("*.md"))}

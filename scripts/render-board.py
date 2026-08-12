@@ -328,6 +328,40 @@ def dedup_url(promise):
     return (promise.get("source") or {}).get("url") or None
 
 
+def pronouns_for(owner, people):
+    """Recorded pronouns for this owner, or None.
+
+    The board names owners in its action lines, so it is one of the surfaces that
+    must read `state.json`'s `people` map rather than infer from a name. Where
+    pronouns are unrecorded the copy stays name-only, never guessed.
+
+    Matching rules, both load-bearing:
+
+    - **Word boundaries.** Owners read like "Full Name (Org)" or free prose, so
+      matching is on whole words. A recorded "Sam" must not match inside
+      "Samantha Jones" and hand one person's pronouns to another.
+    - **Longest key first.** When both "Robin" and "Robin Vega" are
+      recorded, the more specific record wins. Sorted order would be
+      deterministic but arbitrary, and arbitrary here means misgendering someone.
+
+    Ties between equal-length keys break alphabetically, so the result is a pure
+    function of the ledger.
+    """
+    if not owner or not isinstance(people, dict):
+        return None
+    lowered = str(owner).lower()
+    for name in sorted(people, key=lambda n: (-len(str(n)), str(n))):
+        entry = people[name]
+        if not isinstance(entry, dict):
+            continue
+        pronouns = entry.get("pronouns")
+        if not pronouns:
+            continue
+        if re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(name).lower()), lowered):
+            return str(pronouns)
+    return None
+
+
 def union(notes, state_promises):
     """Collapse a state.json promise into the note that already owns its source.
 
@@ -358,8 +392,20 @@ def load_ledger(config, now):
     """Union of open notes and state.json promises, deduped, itemMeta overlaid."""
     state = {}
     if config.state_file.is_file():
-        with open(config.state_file, encoding="utf-8") as handle:
-            state = json.load(handle)
+        try:
+            with open(config.state_file, encoding="utf-8") as handle:
+                state = json.load(handle)
+        except json.JSONDecodeError as error:
+            # another ADHDecoder session may be mid-write. Refuse rather than
+            # render a board from a partial ledger, and never overwrite the last
+            # good board with a wrong one.
+            raise SystemExit(
+                "the ledger did not parse: %s\n"
+                "%s\n"
+                "If another session (a scheduled run, another instance) is writing "
+                "it right now, re-run in a moment. The existing board was left "
+                "untouched." % (error, config.state_file)
+            )
 
     notes, failures = ([], [])
     if config.backend == "obsidian":
@@ -378,13 +424,14 @@ def load_ledger(config, now):
 
     item_meta = state.get("itemMeta") or {}
     dismissed_ids = set(state.get("dismissedFromBoard") or [])
+    people = state.get("people") or {}
     promises = []
     for promise in records:
         meta = item_meta.get(promise["id"]) or {}
         for field in (
             "verifyStatus", "verifyReason", "lastVerified", "snoozedUntil",
-            "deadlineType", "why", "noteOnly", "markMetDraft", "updateDraft",
-            "appliedMarkMet",
+            "deadlineType", "deadlineTypeReason", "why", "noteOnly",
+            "frontmatterWarning", "markMetDraft", "updateDraft", "appliedMarkMet",
         ):
             if field in meta and meta[field] is not None:
                 promise[field] = meta[field]
@@ -393,6 +440,7 @@ def load_ledger(config, now):
         promise["_dismissed"] = (
             promise["id"] in dismissed_ids or bool(meta.get("dismissedFromBoard"))
         )
+        promise["_pronouns"] = pronouns_for(promise.get("owner"), people)
         promises.append(decorate(promise, now))
 
     promises.sort(key=sort_key)
@@ -533,6 +581,12 @@ def step_text(promise, state, now):
 
 def action_text(promise, state, config):
     owner = promise.get("owner") or "the counterparty"
+    if promise.get("_pronouns"):
+        # recorded pronouns travel with the name, at the point copy gets written.
+        # owner strings often carry their own parenthetical ("Name (Org)"), so the
+        # pronouns go directly after the name rather than trailing the whole string
+        name, sep, rest = owner.partition(" (")
+        owner = "%s (%s)%s%s" % (name, promise["_pronouns"], sep, rest)
     expect_by = promise["_expectBy"]
     if state == "ready":
         draft = promise["_draft"] or {}
@@ -609,9 +663,33 @@ def links_html(promise):
     note_ref = promise.get("noteRef") or {}
     if note_ref.get("url"):
         parts.append('<a class="task" href="%s">record</a>' % esc(note_ref["url"]))
+    related = promise.get("relatedRefs") or []
+    if isinstance(related, list) and related:
+        # refs, not urls: show them so a superseding ticket is visible on the card
+        parts.append(
+            '<span class="since">also: %s</span>'
+            % esc(", ".join(str(r) for r in related if str(r).strip()))
+        )
     if not parts:
         parts.append('<span class="since">no link on record</span>')
     return '<div class="links">%s</div>' % "".join(parts)
+
+
+def context_html(promise):
+    """The `.ctx` block: deadline-override reason, then the latest-state `note`.
+
+    Both are fields a run can write, so both must render (ledger-schema.md's
+    no-write-only-overlay-field invariant). Empty when neither is present.
+    """
+    parts = []
+    reason = promise.get("deadlineTypeReason")
+    if reason and (promise.get("deadlineType") or "hard") != "hard":
+        parts.append("<b>Soft date:</b> %s" % esc(reason))
+    if promise.get("note"):
+        parts.append(esc(promise["note"]))
+    if not parts:
+        return ""
+    return '\n  <div class="ctx">%s</div>' % " ".join(parts)
 
 
 def card_html(promise, state, config, now):
@@ -634,7 +712,7 @@ def card_html(promise, state, config, now):
         '  <span class="step">%s</span>\n'
         "  <h3>%s</h3>\n"
         '  <div class="chips" style="margin-bottom:6px">%s</div>\n'
-        '  <div class="do"><b>First action:</b> %s</div>\n'
+        '  <div class="do"><b>First action:</b> %s</div>%s\n'
         "  %s\n"
         "</div>"
     ) % (
@@ -643,6 +721,7 @@ def card_html(promise, state, config, now):
         esc(promise.get("what") or promise.get("title")),
         "".join(chips),
         esc(action_text(promise, state, config)),
+        context_html(promise),
         links_html(promise),
     )
 
@@ -746,7 +825,7 @@ def tomorrow_html(rows, config, now):
     return "\n".join(card_html(p, "upcoming", config, now) for p in rows)
 
 
-def board_note(board, failures, collapsed, config):
+def board_note(board, failures, collapsed, warnings, config):
     parts = []
     ready, move = len(board["ready"]), len(board["move"])
     if ready:
@@ -774,6 +853,16 @@ def board_note(board, failures, collapsed, config):
             "%s could not be parsed and %s not on this board: %s. Fix the frontmatter by hand."
             % (plural(len(failures), "note"), "is" if len(failures) == 1 else "are", names)
         )
+    if warnings:
+        names = ", ".join(sorted(w["file"] for w in warnings))
+        parts.append(
+            "%s %s a frontmatter warning: %s."
+            % (
+                plural(len(warnings), "record"),
+                "carries" if len(warnings) == 1 else "carry",
+                names,
+            )
+        )
     if collapsed:
         # a scheduled run's stdout recap reaches nobody, so the count belongs on
         # the durable artifact too: it explains why N inputs became fewer cards
@@ -794,8 +883,25 @@ def counts_line(board, waiting_tab, shipped):
     )
 
 
+def frontmatter_warnings(promises):
+    """Records that parsed but carry a lint. A stored warning nothing renders is
+    the write-only-field bug; this is its surface."""
+    out = []
+    for promise in promises:
+        if promise.get("frontmatterWarning"):
+            out.append(
+                {
+                    "file": Path(str(promise["id"])).name,
+                    "id": promise["id"],
+                    "warning": promise["frontmatterWarning"],
+                }
+            )
+    return sorted(out, key=lambda w: w["file"])
+
+
 def render(config, promises, failures, collapsed, state, now, template_text):
     board, tomorrow, waiting_tab, shipped, history = group_promises(promises, now)
+    warnings = frontmatter_warnings(promises)
     out = template_text
     tokens = {
         "{{LAST_SWEPT}}": esc(humanize_since(state.get("lastSwept"), now)),
@@ -804,7 +910,7 @@ def render(config, promises, failures, collapsed, state, now, template_text):
         "{{N_WAITING}}": str(len(waiting_tab)),
         "{{N_TOMORROW}}": str(len(tomorrow)),
         "{{N_HISTORY}}": str(len(history)),
-        "{{BOARD_NOTE}}": esc(board_note(board, failures, collapsed, config)),
+        "{{BOARD_NOTE}}": esc(board_note(board, failures, collapsed, warnings, config)),
     }
     for token, value in tokens.items():
         out = out.replace(token, value)
@@ -820,7 +926,7 @@ def render(config, promises, failures, collapsed, state, now, template_text):
         out, hits = re.subn(pattern, lambda _m, r=replacement: r, out, count=1, flags=re.S)
         if not hits:
             raise SystemExit("template is missing an injection point: %s" % pattern)
-    return out, (board, tomorrow, waiting_tab, shipped, history)
+    return out, (board, tomorrow, waiting_tab, shipped, history), warnings
 
 
 def write_atomic(target, text):
@@ -867,7 +973,9 @@ def main(argv=None):
     template_text = template_path.read_text(encoding="utf-8")
 
     promises, failures, state, collapsed = load_ledger(config, now)
-    text, groups = render(config, promises, failures, collapsed, state, now, template_text)
+    text, groups, warnings = render(
+        config, promises, failures, collapsed, state, now, template_text
+    )
     board, tomorrow, waiting_tab, shipped, history = groups
 
     target = args.out or config.board_path
@@ -887,6 +995,8 @@ def main(argv=None):
         print(summary)
         for failure in sorted(failures, key=lambda f: f["file"]):
             print("  parse failure: %s (%s)" % (failure["file"], failure["symptom"]))
+        for warning in warnings:
+            print("  frontmatter warning: %s (%s)" % (warning["file"], warning["warning"]))
         for item in sorted(collapsed, key=lambda c: c["id"]):
             print("  deduped: state.json %s collapsed into %s" % (item["id"], item["into"]))
         print("board: %s" % (target if target else "(boardPath unset, nothing written)"))

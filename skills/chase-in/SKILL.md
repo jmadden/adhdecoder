@@ -176,6 +176,17 @@ Present a scannable board, not a feed:
 Eat the grunt: the user's only job is to read the top item, approve a draft, and
 send.
 
+## Naming a person
+
+Before writing any copy that refers to a person, read `state.json`'s **`people`**
+map (`reference/ledger-schema.md`) and use the pronouns recorded there. Where a
+person has none recorded, use they/them; never infer pronouns from a name. If the
+user corrects a pronoun, record it in `people` so the next run does not repeat the
+error, and say that you have.
+
+This map exists because a run wrote the wrong pronoun for a real person. A stored
+correction that nothing reads gets the same thing wrong again.
+
 ## Guardrails
 
 - **Never auto-send, never auto-post.** Drafts only.

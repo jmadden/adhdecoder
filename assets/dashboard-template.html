@@ -55,6 +55,10 @@
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .big .do{margin:8px 0 0;padding:10px 12px;background:#fafbff;border:1px dashed #cdd8f7;border-radius:8px;
     display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  /* latest-state context (promise `note`, deadline-override reason) */
+  .big .ctx{margin:8px 0 0;font-size:13px;color:var(--muted);
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .big .ctx b{color:var(--ink);font-weight:600;}
   .big .do b{color:var(--accent);}
   .big.clipped::after{content:"";position:absolute;left:0;right:0;bottom:44px;height:34px;
     background:linear-gradient(rgba(255,255,255,0),var(--card));pointer-events:none;}
@@ -80,7 +84,7 @@
   .modal-body .big:hover{box-shadow:none;transform:none;}
   .modal-body .big.waiting{border-left-color:var(--wait);}
   .modal-body .big.done{border-left-color:var(--good);}
-  .modal-body .big h3,.modal-body .big .do{display:block;-webkit-line-clamp:unset;overflow:visible;}
+  .modal-body .big h3,.modal-body .big .do,.modal-body .big .ctx{display:block;-webkit-line-clamp:unset;overflow:visible;}
   .modal-body .big.clipped::after{display:none;}
   .modal-body .big .expand{display:none;}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
@@ -216,6 +220,9 @@
         <span class="chip c-task">VERIFY_STATUS</span>
       </div>
       <div class="do"><b>First action:</b> ONE_SMALL_NEXT_MOVE</div>
+      <!-- optional context: the promise's `note` (latest state) and, on a soft
+           date, `itemMeta.deadlineTypeReason`. Omit the div when both are absent. -->
+      <div class="ctx"><b>Soft date:</b> WHY_THE_DEADLINE_WAS_OVERRIDDEN LATEST_STATE_NOTE</div>
       <div class="links">
         <a href="SOURCE_URL" target="_blank">source</a>
         <a class="task" href="RECORD_LINK">record</a>
@@ -255,7 +262,7 @@
 
   function isClipped(card){
     // the card itself always fits; clipping shows up on the clamped children
-    return [].some.call(card.querySelectorAll('h3,.do,.chips'), function(el){
+    return [].some.call(card.querySelectorAll('h3,.do,.ctx,.chips'), function(el){
       return el.scrollHeight > el.clientHeight + 1;
     });
   }

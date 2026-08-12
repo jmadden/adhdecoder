@@ -29,6 +29,9 @@ adapters/<name>/              optional backend adapters (SKILL.md + reference.md
                               e.g. adapters/obsidian; registered in plugin.json
 scripts/render-board.py       the board renderer; implements reference/dashboard.md
                               (pure: config + ledger + clock in, HTML out)
+scripts/validate-state.py     schema validator; reports undefined + deprecated
+                              fields at all three levels. Called by `doctor`.
+                              Validates, never repairs
 scripts/tests/                fixture test + invented fixture ledger. The fixture
                               state file is `fixtures/ledger/fixture-state.json`,
                               NOT `state.json`, so .gitignore's instance-data
@@ -135,10 +138,22 @@ a four-group spec. The render now lives in `scripts/render-board.py`; skills cal
 it. When behaviour is deterministic enough to be code, make it code, and change
 the spec and the script in the same commit.
 
-**No write-only drafts.** If a skill can park a pending decision in `itemMeta`,
-a surface must render it, in the same change. A draft nothing displays is
-invisible drift: the record keeps reading open, the board keeps showing
-finished work as the user's move, and the counts stop being trustworthy.
+**No write-only fields.** If a run can write a field into `state.json` (an
+`itemMeta` overlay field, a top-level map, a promise field), a surface must
+render it, in the same change. Broadened from drafts in schemaVersion 2: the
+failure mode never depended on the field being a draft.
+
+- A draft nothing displays is invisible drift: the record keeps reading open,
+  the board keeps showing finished work as the user's move, and the counts stop
+  being trustworthy.
+- A `frontmatterWarning` nothing displays left a damaged note unfindable for
+  weeks.
+- A recorded pronoun nothing reads means misgendering a real person again on the
+  next run. `people` is read by every skill that writes person-referring copy.
+
+Adding a field means adding its surface. `scripts/validate-state.py` reports any
+field the schema does not define, so the next invented name is caught by
+`doctor` rather than by a hand audit.
 
 When adding sweep/source skills, port the _technique_ (how to query a category),
 never the specific ids or rosters.
