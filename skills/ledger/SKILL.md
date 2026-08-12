@@ -80,15 +80,39 @@ verify metadata AND the upgraded `source` to `itemMeta[<id>]` (never the note),
 and surface `resolved` as a "looks done, close it?" draft rather than
 auto-marking met.
 
-**Query.** If a read-only backend adapter is active, obtain the promise set from that adapter (the union of its open records + builtin
-`state.json`), then apply the grouping/sorting/recompute below unchanged.
-Otherwise read `state.json`. For read-only-backend promises, overlay
-`itemMeta[<id>]` (`snoozedUntil`, `deadlineType`, verify metadata, and a
-reconcile-enriched `source`/`noteOnly`) onto the record at read time. Recompute
-`overdue` (expectBy < today, not met, AND
-`deadlineType` is `hard` - `soft`/`none` are never overdue) and `stakes` at read
-time. Expose `snoozedUntil` on each promise so consumers can skip snoozed items.
-Then present, grouped and sorted:
+**Query.** **Do not re-derive the read.** `scripts/ledger_query.py` is the one
+implementation, for every backend:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --select open --json
+```
+
+It resolves the backend, reads the promise set (for a read-only note-backed
+backend, the union of its open records with the builtin `state.json`, deduped
+one-way by source link), overlays `itemMeta[<id>]` (`snoozedUntil`,
+`deadlineType` + reason, verify metadata, drafts, a reconcile-enriched
+`source`/`noteOnly`, `frontmatterWarning`), and recomputes derived state:
+`overdue` (expectBy < today, not met, AND `deadlineType` is `hard` - `soft`/`none`
+are never overdue), `stakes`, business-day staleness, snooze, dismissal, and
+ready-to-close. Each record carries that under `derived`, so a consumer reads it
+rather than recomputing it.
+
+Selectors: `all` `open` `closed` `ready-to-close` `slipping` `drifting`
+`waiting` `owed` `upcoming` `snoozed`, plus `--context` and `--direction`
+filters. Every response also carries `parseFailures`, `frontmatterWarnings`,
+`collapsed` and `lastSwept`, which a surface must relay rather than drop.
+
+The script is read-only and has no write path at all. Writes stay with the
+operations above.
+
+**Why this is code and not prose:** a second derivation of "overdue" is a second
+answer, and the two disagree exactly where it hurts - an overridden deadline
+chased as if it were hard, a snoozed item resurfacing, a dismissed item whose
+draft should have revived it. One definition means the board and every chase
+agree about the same ledger.
+
+Then present, grouped and sorted (this part is yours):
 
 - **They owe me** and **I owe them**, as two sections.
 - Within each: overdue first (most overdue on top), then due-soon, then the rest.

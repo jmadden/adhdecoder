@@ -27,8 +27,14 @@ Never let bucket 2 or 3 content leak into this repo.
 skills/<name>/SKILL.md        core skills (instructions FOR Claude)
 adapters/<name>/              optional backend adapters (SKILL.md + reference.md),
                               e.g. adapters/obsidian; registered in plugin.json
+scripts/ledger_query.py       THE ledger read: backend resolution, the union +
+                              one-way dedup, itemMeta overlay, all derived state,
+                              and the selectors the read-side skills ask for.
+                              Read-only, no write path. Underscored (not
+                              kebab-case) because it is the one importable module
 scripts/render-board.py       the board renderer; implements reference/dashboard.md
-                              (pure: config + ledger + clock in, HTML out)
+                              (pure: config + ledger + clock in, HTML out).
+                              Imports ledger_query; owns only grouping + HTML
 scripts/validate-state.py     schema validator; reports undefined + deprecated
                               fields at all three levels. Called by `doctor`.
                               Validates, never repairs
@@ -137,6 +143,14 @@ implementation, so every render re-improvised it and a three-group render surviv
 a four-group spec. The render now lives in `scripts/render-board.py`; skills call
 it. When behaviour is deterministic enough to be code, make it code, and change
 the spec and the script in the same commit.
+
+**One read, one answer.** The ledger read lives in `scripts/ledger_query.py` and
+nowhere else. A skill that re-derives `overdue`, staleness, snooze or
+ready-to-close from prose produces a second answer, and the two disagree exactly
+where it matters: a soft deadline chased as though it were hard aims a false nudge
+at a real person. Read-side skills call the Query and supply only judgment
+(tiering, copy, tone). The split to hold: **mechanical selection is code,
+judgment is prose.**
 
 **No write-only fields.** If a run can write a field into `state.json` (an
 `itemMeta` overlay field, a top-level map, a promise field), a surface must

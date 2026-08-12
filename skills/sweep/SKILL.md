@@ -149,9 +149,29 @@ being duplicated here.
 
 ## Context enrichment before creating (dedup)
 
-Read the ledger backend first. Before recording a candidate as a NEW promise,
-match it against existing promises **by source ref/key OR by context + topic**
-(not just an exact id), and also against `dedup.seen`. If it matches,
+Read the ledger backend first, through the Query, so the existing set you match
+against is the same one every other surface sees:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --select all --json
+```
+
+Dedup has a mechanical half and a judgment half. **The mechanical half is the
+Query's:** an exact `source.url` match against an existing record is already
+decided, and the Query's key is authoritative (non-`noteOnly` urls only, since a
+note link identifies one note rather than a shared item). Do not invent a second
+url-matching rule; a candidate you create under a different key becomes a
+`state.json` record the Query then collapses into the note that owns it, so the
+duplicate never shows on the board but accumulates in the file forever. The
+board note's collapse count is the only symptom.
+
+**The judgment half is yours:** matching **by context + topic** when the refs
+differ (a CRM record and its linked tracker issue, a meeting's call record and
+its notes doc, are one work item). That needs reading, not string equality.
+
+Before recording a candidate as a NEW promise, match it both ways, and also
+against `dedup.seen`. If it matches,
 **enrich/attach** - refresh `lastVerified`, append a `history` note, adjust
 `expectBy` if the source moved it - never create a second record. Decode as new
 **only if it maps to nothing**. Add newly-decoded ids to `dedup.seen`. A CRM

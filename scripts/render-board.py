@@ -4,8 +4,14 @@
 Implements `reference/dashboard.md`. Pure function of (config, ledger, now):
 same inputs in, byte-identical HTML out. Writes only `config.schedule.boardPath`.
 
-Reconcile is NOT done here. A deterministic offline script cannot reach live
-sources, so it renders the verdicts already in the ledger; the `board` and
+**The read lives in `ledger_query.py`**, which is the one implementation of the
+Query every read-side skill calls. This file owns only what is board-specific:
+grouping into the five tabs and the four colour groups, card copy, and the HTML.
+Derived state (`overdue`, staleness, snooze, ready-to-close) is not recomputed
+here, so the board and every chase agree about the same ledger.
+
+Reconcile is NOT done here either. A deterministic offline script cannot reach
+live sources, so it renders the verdicts already in the ledger; the `board` and
 `daily-run` skills reconcile first, then call this. See `reference/dashboard.md`
 step 2.
 
@@ -19,26 +25,18 @@ and config. No personal or company data lives in this file.
 
 import argparse
 import html
-import json
 import os
 import re
 import sys
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
-try:
-    import yaml
-except ModuleNotFoundError:  # pragma: no cover - environment guard
-    sys.exit(
-        "render-board.py needs a real YAML parser for note frontmatter.\n"
-        "Install it, then re-run:\n"
-        "    python3 -m pip install --user pyyaml\n"
-        "Refusing to fall back to a naive line parser: a blank `due:` would be\n"
-        "misread as the next line's value."
-    )
+# the shared Query sits beside this script; make it importable whether this file
+# is executed directly or loaded by a test harness
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ledger_query as lq  # noqa: E402
 
-OPEN_NOTE_STATUS = ("todo", "in-progress", "blocked")
 VERIFY_LABELS = {
     "verified-open": "verified open",
     "resolved": "resolved",
@@ -47,15 +45,6 @@ VERIFY_LABELS = {
     "unverifiable": "unverified - confirm",
     None: "unverified",
 }
-THEY_OWE_HINTS = (
-    "chase", "follow up", "follow-up", "waiting on", "get ", "ask ", "confirm with",
-    "hear back", "nudge", "check with",
-)
-I_OWE_HINTS = (
-    "deliver", "provide", "send", "build", "answer", "set up", "configure",
-    "spec ", "draft", "write", "reply", "respond", "review", "investigate",
-    "diagnose", "escalate", "recommend", "assess", "pull ", "take charge",
-)
 SHIPPED_WINDOW_DAYS = 7
 TOMORROW_WINDOW_DAYS = 7
 
@@ -69,49 +58,6 @@ def esc(value):
     if value is None:
         return ""
     return html.escape(str(value), quote=True)
-
-
-def as_date(value):
-    """Coerce a frontmatter/JSON date to a `date`, or None. Never raises."""
-    if value is None or value == "":
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    text = str(value).strip()
-    if not text:
-        return None
-    match = re.match(r"(\d{4})-(\d{2})-(\d{2})", text)
-    if not match:
-        return None
-    try:
-        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
-    except ValueError:
-        return None
-
-
-def first_scalar(value):
-    """requester/customer may be a scalar or a YAML list. Take one stable value."""
-    if isinstance(value, list):
-        items = [str(v).strip() for v in value if str(v).strip()]
-        return items[0] if items else None
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def business_days_between(start, end):
-    if start is None or end is None or end <= start:
-        return 0
-    days = 0
-    cursor = start
-    while cursor < end:
-        cursor += timedelta(days=1)
-        if cursor.weekday() < 5:
-            days += 1
-    return days
 
 
 def humanize_since(stamp, now):
@@ -143,364 +89,6 @@ def humanize_since(stamp, now):
 
 def plural(count, word):
     return "%d %s" % (count, word if count == 1 else word + "s")
-
-
-# --------------------------------------------------------------------------
-# config
-# --------------------------------------------------------------------------
-
-class Config:
-    def __init__(self, path):
-        self.path = Path(path).expanduser().resolve()
-        with open(self.path, encoding="utf-8") as handle:
-            raw = json.load(handle)
-        self.raw = raw
-        storage = raw.get("storage") or {}
-        overrides = storage.get("overrides") or {}
-        ledger = raw.get("ledger") or {}
-        schedule = raw.get("schedule") or {}
-
-        self.knowledge_path = Path(storage.get("knowledgePath", "")).expanduser()
-        self.instance_path = Path(storage.get("instancePath", "")).expanduser()
-        self.tasks_dir = self.knowledge_path / overrides.get("tasksDir", "Tasks")
-        self.state_file = self.instance_path / overrides.get("stateFile", "state.json")
-        # a deprecated legacy alias is treated exactly like `obsidian`
-        self.backend = "obsidian" if ledger.get("backend") in ("obsidian", "tasknotes") else "builtin"
-        self.write_mode = ledger.get("writeMode", "readonly")
-        cutover = ledger.get("cutover") or {}
-        self.readwrite = (
-            self.write_mode == "readwrite" and bool(cutover.get("singleWriterConfirmed"))
-        )
-        self.board_path = schedule.get("boardPath") or None
-        self.vault_name = self.knowledge_path.parent.name if self.knowledge_path.parts else ""
-
-
-# --------------------------------------------------------------------------
-# note parsing
-# --------------------------------------------------------------------------
-
-def split_frontmatter(text):
-    """Return (frontmatter_text, body). Raises ValueError when malformed.
-
-    Line-based: the closing delimiter is a line that is exactly `---`, so a
-    horizontal rule in the body is never mistaken for the end of frontmatter.
-    """
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        raise ValueError("no opening --- on frontmatter")
-    for index in range(1, len(lines)):
-        if lines[index].strip() == "---":
-            return "\n".join(lines[1:index]), "\n".join(lines[index + 1:])
-    raise ValueError("no closing --- on frontmatter")
-
-
-def infer_direction(title):
-    lowered = (title or "").lower()
-    for hint in THEY_OWE_HINTS:
-        if lowered.startswith(hint) or (" " + hint) in lowered:
-            return "they-owe-me"
-    for hint in I_OWE_HINTS:
-        if lowered.startswith(hint) or (" " + hint) in lowered:
-            return "i-owe-them"
-    return "i-owe-them"
-
-
-def extract_source(body, note_url):
-    """Best ACTIONABLE source from the note body, else the note link itself."""
-    for match in re.finditer(r"\[[^\]]*\]\((https?://[^\s)]+)\)", body):
-        url = match.group(1)
-        if not url.startswith("obsidian://"):
-            return {"type": "note-extracted", "ref": None, "url": url}, False
-    match = re.search(r"(?<![(\w])(https?://[^\s)>\]]+)", body)
-    if match:
-        return {"type": "note-extracted", "ref": None, "url": match.group(1)}, False
-    return {"type": "note", "ref": None, "url": note_url}, True
-
-
-def note_url_for(vault, knowledge_path, note_path):
-    from urllib.parse import quote
-
-    rel = note_path.relative_to(knowledge_path.parent).with_suffix("")
-    return "obsidian://open?vault=%s&file=%s" % (quote(vault), quote(str(rel)))
-
-
-def read_notes(config):
-    """Enumerate tasksDir -> (promises, parse_failures). Never skips silently."""
-    promises = []
-    failures = []
-    if not config.tasks_dir.is_dir():
-        return promises, failures
-
-    for note_path in sorted(config.tasks_dir.glob("*.md"), key=lambda p: p.name):
-        rel_id = str(note_path.relative_to(config.knowledge_path))
-        try:
-            text = note_path.read_text(encoding="utf-8")
-            frontmatter_text, body = split_frontmatter(text)
-            frontmatter = yaml.safe_load(frontmatter_text)
-            if frontmatter is None:
-                frontmatter = {}
-            if not isinstance(frontmatter, dict):
-                raise ValueError("frontmatter is not a mapping")
-        except (ValueError, OSError, yaml.YAMLError) as error:
-            symptom = str(error).splitlines()[0][:160]
-            failures.append({"file": note_path.name, "id": rel_id, "symptom": symptom})
-            continue
-
-        tags = frontmatter.get("tags") or []
-        if isinstance(tags, str):
-            tags = [tags]
-        tags = [str(t).strip() for t in tags]
-        if "task" not in tags:
-            failures.append(
-                {"file": note_path.name, "id": rel_id, "symptom": "missing the `task` tag"}
-            )
-            continue
-
-        note_status = str(frontmatter.get("status") or "todo").strip().lower()
-        due = as_date(frontmatter.get("due"))
-        scheduled = as_date(frontmatter.get("scheduled"))
-        priority = str(frontmatter.get("priority") or "").strip().lower()
-        title = first_scalar(frontmatter.get("title")) or note_path.stem
-        context = first_scalar(frontmatter.get("customer")) or first_scalar(
-            frontmatter.get("projects")
-        )
-        owner = first_scalar(frontmatter.get("requester")) or first_scalar(
-            frontmatter.get("customer")
-        )
-        note_url = note_url_for(config.vault_name, config.knowledge_path, note_path)
-        source, note_only = extract_source(body, note_url)
-
-        if "ongoing" in tags or (scheduled and not due):
-            deadline_type = "soft"
-        else:
-            deadline_type = "hard"
-
-        history = [
-            {"ts": m.group(1), "note": m.group(2).strip()}
-            for m in re.finditer(r"^\s*[-*]?\s*update\s+(\S+)\s*[-–]\s*(.*)$", body, re.M | re.I)
-        ]
-
-        promises.append(
-            {
-                "id": rel_id,
-                "title": title,
-                "context": context,
-                "direction": infer_direction(title),
-                "what": first_scalar(frontmatter.get("title")) or title,
-                "owner": owner,
-                "expectBy": due.isoformat() if due else None,
-                "status": "met" if note_status == "done" else "pending",
-                "completedDate": (
-                    as_date(frontmatter.get("completedDate")).isoformat()
-                    if as_date(frontmatter.get("completedDate"))
-                    else None
-                ),
-                "stakes": "high" if priority == "high" else "normal",
-                "source": source,
-                "noteRef": {"url": note_url},
-                "noteOnly": note_only,
-                "lastVerified": frontmatter.get("dateModified"),
-                "verifyStatus": None,
-                "verifyReason": None,
-                "why": None,
-                "deadlineType": deadline_type,
-                "snoozedUntil": None,
-                "history": history,
-                "_origin": "note",
-                "_noteStatus": note_status,
-            }
-        )
-    return promises, failures
-
-
-# --------------------------------------------------------------------------
-# ledger assembly
-# --------------------------------------------------------------------------
-
-def dedup_url(promise):
-    """The url a record may be deduped on, or None.
-
-    `noteOnly` sources ARE the note link, so they identify one note rather than
-    one shared item and can never stand in for a cross-store match.
-    """
-    if promise.get("noteOnly"):
-        return None
-    return (promise.get("source") or {}).get("url") or None
-
-
-def pronouns_for(owner, people):
-    """Recorded pronouns for this owner, or None.
-
-    The board names owners in its action lines, so it is one of the surfaces that
-    must read `state.json`'s `people` map rather than infer from a name. Where
-    pronouns are unrecorded the copy stays name-only, never guessed.
-
-    Matching rules, both load-bearing:
-
-    - **Word boundaries.** Owners read like "Full Name (Org)" or free prose, so
-      matching is on whole words. A recorded "Sam" must not match inside
-      "Samantha Jones" and hand one person's pronouns to another.
-    - **Longest key first.** When both "Robin" and "Robin Vega" are
-      recorded, the more specific record wins. Sorted order would be
-      deterministic but arbitrary, and arbitrary here means misgendering someone.
-
-    Ties between equal-length keys break alphabetically, so the result is a pure
-    function of the ledger.
-    """
-    if not owner or not isinstance(people, dict):
-        return None
-    lowered = str(owner).lower()
-    for name in sorted(people, key=lambda n: (-len(str(n)), str(n))):
-        entry = people[name]
-        if not isinstance(entry, dict):
-            continue
-        pronouns = entry.get("pronouns")
-        if not pronouns:
-            continue
-        if re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(name).lower()), lowered):
-            return str(pronouns)
-    return None
-
-
-def union(notes, state_promises):
-    """Collapse a state.json promise into the note that already owns its source.
-
-    Deliberately ONE-WAY (adapter spec: the board is the union of open notes plus
-    state.json promises, deduped by source link). Two records from the SAME store
-    never collapse: distinct tasks routinely cite one ticket or doc, and swallowing
-    one of them is data loss that looks like an empty result. Returns
-    (records, collapsed) so a collapse is never invisible.
-    """
-    note_urls = {}
-    for promise in notes:
-        url = dedup_url(promise)
-        if url:
-            note_urls.setdefault(url, promise["id"])
-
-    records = list(notes)
-    collapsed = []
-    for promise in state_promises:
-        url = dedup_url(promise)
-        if url and url in note_urls:
-            collapsed.append({"id": promise["id"], "into": note_urls[url], "url": url})
-            continue
-        records.append(promise)
-    return records, collapsed
-
-
-def load_ledger(config, now):
-    """Union of open notes and state.json promises, deduped, itemMeta overlaid."""
-    state = {}
-    if config.state_file.is_file():
-        try:
-            with open(config.state_file, encoding="utf-8") as handle:
-                state = json.load(handle)
-        except json.JSONDecodeError as error:
-            # another ADHDecoder session may be mid-write. Refuse rather than
-            # render a board from a partial ledger, and never overwrite the last
-            # good board with a wrong one.
-            raise SystemExit(
-                "the ledger did not parse: %s\n"
-                "%s\n"
-                "If another session (a scheduled run, another instance) is writing "
-                "it right now, re-run in a moment. The existing board was left "
-                "untouched." % (error, config.state_file)
-            )
-
-    notes, failures = ([], [])
-    if config.backend == "obsidian":
-        notes, failures = read_notes(config)
-
-    state_promises = []
-    for promise in state.get("promises") or []:
-        if promise.get("status") == "promoted":
-            continue
-        record = dict(promise)
-        record["_origin"] = "state"
-        record.setdefault("_noteStatus", None)
-        state_promises.append(record)
-
-    records, collapsed = union(notes, state_promises)
-
-    item_meta = state.get("itemMeta") or {}
-    dismissed_ids = set(state.get("dismissedFromBoard") or [])
-    people = state.get("people") or {}
-    promises = []
-    for promise in records:
-        meta = item_meta.get(promise["id"]) or {}
-        for field in (
-            "verifyStatus", "verifyReason", "lastVerified", "snoozedUntil",
-            "deadlineType", "deadlineTypeReason", "why", "noteOnly",
-            "frontmatterWarning", "markMetDraft", "updateDraft", "appliedMarkMet",
-        ):
-            if field in meta and meta[field] is not None:
-                promise[field] = meta[field]
-        if isinstance(meta.get("source"), dict) and meta["source"].get("url"):
-            promise["source"] = meta["source"]
-        promise["_dismissed"] = (
-            promise["id"] in dismissed_ids or bool(meta.get("dismissedFromBoard"))
-        )
-        promise["_pronouns"] = pronouns_for(promise.get("owner"), people)
-        promises.append(decorate(promise, now))
-
-    promises.sort(key=sort_key)
-    return promises, failures, state, collapsed
-
-
-def decorate(promise, now):
-    """Recompute derived state. Never trusts a persisted `overdue`."""
-    today = now.date()
-    expect_by = as_date(promise.get("expectBy"))
-    deadline_type = promise.get("deadlineType") or "hard"
-    is_open = promise.get("status") in ("pending", "overdue")
-
-    promise["_expectBy"] = expect_by
-    promise["_open"] = is_open
-    promise["_overdue"] = bool(
-        is_open and expect_by and expect_by < today and deadline_type == "hard"
-    )
-    promise["_dueToday"] = bool(is_open and expect_by == today)
-    # a soft/none date in the past is NOT overdue; saying "due <past date>" reads
-    # as a missed hard deadline, so it gets its own wording
-    promise["_softPast"] = bool(
-        is_open and expect_by and expect_by < today and deadline_type != "hard"
-    )
-
-    snoozed_until = as_date(promise.get("snoozedUntil"))
-    promise["_snoozed"] = bool(snoozed_until and snoozed_until > today)
-
-    last_verified = as_date(promise.get("lastVerified"))
-    promise["_staleDays"] = business_days_between(last_verified, today)
-
-    draft = promise.get("markMetDraft") or promise.get("updateDraft")
-    promise["_draft"] = draft if isinstance(draft, dict) else None
-    promise["_readyToClose"] = bool(
-        is_open and (promise.get("verifyStatus") == "resolved" or promise["_draft"])
-    )
-    # A pending draft outranks a board dismissal: dismissal means "stop showing
-    # me this as work", a draft is an unanswered question about the record.
-    promise["_suppressed"] = promise["_snoozed"] or (
-        promise["_dismissed"] and not promise["_readyToClose"]
-    )
-    promise["_flagged"] = bool(
-        is_open and (promise.get("stakes") == "high" or promise["_overdue"])
-    )
-    completed = as_date(promise.get("completedDate")) or (
-        as_date(promise.get("lastVerified")) if not is_open else None
-    )
-    promise["_completed"] = completed
-    promise["_doneToday"] = bool(not is_open and completed == today)
-    return promise
-
-
-def sort_key(promise):
-    """Flagged first, then earliest date, then id. Total and stable."""
-    expect_by = promise.get("_expectBy")
-    return (
-        0 if promise.get("_flagged") else 1,
-        expect_by.isoformat() if expect_by else "9999-99-99",
-        str(promise.get("id")),
-    )
 
 
 # --------------------------------------------------------------------------
@@ -883,25 +471,8 @@ def counts_line(board, waiting_tab, shipped):
     )
 
 
-def frontmatter_warnings(promises):
-    """Records that parsed but carry a lint. A stored warning nothing renders is
-    the write-only-field bug; this is its surface."""
-    out = []
-    for promise in promises:
-        if promise.get("frontmatterWarning"):
-            out.append(
-                {
-                    "file": Path(str(promise["id"])).name,
-                    "id": promise["id"],
-                    "warning": promise["frontmatterWarning"],
-                }
-            )
-    return sorted(out, key=lambda w: w["file"])
-
-
-def render(config, promises, failures, collapsed, state, now, template_text):
+def render(config, promises, failures, collapsed, warnings, state, now, template_text):
     board, tomorrow, waiting_tab, shipped, history = group_promises(promises, now)
-    warnings = frontmatter_warnings(promises)
     out = template_text
     tokens = {
         "{{LAST_SWEPT}}": esc(humanize_since(state.get("lastSwept"), now)),
@@ -926,7 +497,7 @@ def render(config, promises, failures, collapsed, state, now, template_text):
         out, hits = re.subn(pattern, lambda _m, r=replacement: r, out, count=1, flags=re.S)
         if not hits:
             raise SystemExit("template is missing an injection point: %s" % pattern)
-    return out, (board, tomorrow, waiting_tab, shipped, history), warnings
+    return out, (board, tomorrow, waiting_tab, shipped, history)
 
 
 def write_atomic(target, text):
@@ -962,7 +533,7 @@ def main(argv=None):
     parser.add_argument("--quiet", action="store_true", help="suppress the stdout recap")
     args = parser.parse_args(argv)
 
-    config = Config(args.config)
+    config = lq.Config(args.config)
     now = datetime.fromisoformat(args.now) if args.now else datetime.now()
 
     template_path = (
@@ -972,9 +543,13 @@ def main(argv=None):
     )
     template_text = template_path.read_text(encoding="utf-8")
 
-    promises, failures, state, collapsed = load_ledger(config, now)
-    text, groups, warnings = render(
-        config, promises, failures, collapsed, state, now, template_text
+    promises, query_meta = lq.query(config, now)
+    failures = query_meta["failures"]
+    collapsed = query_meta["collapsed"]
+    state = query_meta["state"]
+    warnings = query_meta["warnings"]
+    text, groups = render(
+        config, promises, failures, collapsed, warnings, state, now, template_text
     )
     board, tomorrow, waiting_tab, shipped, history = groups
 

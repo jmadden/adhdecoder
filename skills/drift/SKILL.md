@@ -94,8 +94,12 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 3. Compute days since `lastVerified` in **business days** (exclude weekends;
    a backend adapter supplies `lastVerified` - e.g. the note-backed adapter uses
    `dateModified` - this skill does the business-day math).
-4. Surface when: (`status` is `blocked` OR `stakes` is `high`) AND business
-   days >= ~2, **or** any open item AND business days >= ~15.
+4. Surface when the Query says so. The thresholds live in
+   `scripts/ledger_query.py` (`STALE_DAYS_HIGH` / `STALE_DAYS_ANY`), currently 2
+   business days for a `blocked` or high-stakes item and 5 for any other open
+   one, and `--select drifting` applies them. Do not restate the numbers here:
+   this file and the adapter reference disagreed for weeks (15 versus 5) with
+   nothing to catch it, which is what the single implementation is for.
 
 Present as: `<what>` (`<owner>`) hasn't moved in `<N>` business days -
 `<verifyStatus>` - `<source.url>` (a "(note)" hint if `noteOnly`; for a
@@ -145,6 +149,25 @@ If the user taps it: hand off to the `ledger` skill to set
 `driftClearedUntil` **5 days out** from today and, if a note was given,
 append it to `history`. Do not clear anything without the user's tap - never
 auto-clear a flag.
+
+## Getting the candidate set
+
+**Do not re-derive staleness.** Ask the Query:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --select drifting --json
+```
+
+`drifting` is business-day staleness on open items with no date (the silent-rot
+zone date-chasing misses: >= 2 business days when blocked or high-stakes, >= 5
+for anything else), plus high-stakes items already overdue or due soon. It
+honours `driftClearedUntil`, snooze and dismissal, and excludes ready-to-close.
+`derived.staleDays` is the business-day count to quote.
+
+**Yours is the judgment:** which of these is worth surfacing, and the
+observational framing ("hasn't moved in N business days", never an accusation).
+Reconcile each candidate before surfacing it, per the guardrails below.
 
 ## Guardrails
 

@@ -139,6 +139,23 @@ the ledger's `lastSwept` - so the user knows how current the picture is.
 The user approves and posts (or asks for edits). This skill posts nothing
 itself.
 
+## Getting the promise set for a context
+
+**Do not re-derive the read.** Ask the Query, scoped to the context:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --select open --context "<context>" --json
+```
+
+Add `--select waiting` for what that context owes back, and
+`--select closed --context "<context>"` for what has shipped. `derived` carries
+`overdue`, `dueSoon` and `readyToClose` already computed, so the status you
+publish matches the board the user is looking at.
+
+**Yours is the judgment:** the draft itself, what is safe to say, and the
+separate confirm-before-sending list for anything unverified.
+
 ## Naming a person
 
 Before writing any copy that refers to a person, read `state.json`'s **`people`**

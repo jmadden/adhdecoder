@@ -92,6 +92,12 @@ with no `expectBy`, drift uses a **staleness** signal instead: days since
 - `blocked` or high-stakes AND untouched >= ~2 business days, or
 - any open item untouched >= ~5 business days.
 
+**The thresholds live in `scripts/ledger_query.py`** (`STALE_DAYS_HIGH` /
+`STALE_DAYS_ANY`), which is what actually applies them; the numbers above are
+illustrative. Change the constant, not a document: this file and
+`skills/drift/SKILL.md` carried two different numbers for weeks and nothing
+caught it.
+
 Framed observationally ("hasn't moved in N business days"), respecting
 `dismissedFromBoard` and `driftClearedUntil`. This makes no-due high/blocked
 items visible instead of invisible. It is generic (any backend); the adapter

@@ -176,6 +176,29 @@ Present a scannable board, not a feed:
 Eat the grunt: the user's only job is to read the top item, approve a draft, and
 send.
 
+## Getting the promise set
+
+**Do not re-derive what is slipping.** Ask the Query:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --select slipping --json
+```
+
+`slipping` is items with a real hard date that has passed or lands today, with
+snoozed / dismissed / ready-to-close items already excluded. Soft and dateless
+items are deliberately NOT here: chasing a soft date as though it were a missed
+commitment aims a false nudge at a real person. Those reach the user through
+`drift` instead (`--select drifting`).
+
+Each record carries its recomputed state under `derived` (`overdue`, `staleDays`,
+`flagged`, `pronouns`). Read it; do not recompute it, or your list and the board
+will disagree about the same ledger.
+
+**Yours is the judgment:** tiering by stakes, what the nudge says, and the tone.
+Relay `parseFailures` and `frontmatterWarnings` from the response rather than
+dropping them.
+
 ## Naming a person
 
 Before writing any copy that refers to a person, read `state.json`'s **`people`**

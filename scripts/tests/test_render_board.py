@@ -21,6 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 SCRIPT = REPO / "scripts" / "render-board.py"
+QUERY = REPO / "scripts" / "ledger_query.py"
 FIXTURES = HERE / "fixtures"
 NOW = "2026-08-12T09:15:00"
 
@@ -95,7 +96,8 @@ def group_block(html, label):
 def check_pronoun_matching():
     """Unit-check the people lookup directly: getting this wrong misgenders a real
     person, and the board-level assertions cannot cover the ambiguous cases."""
-    spec = importlib.util.spec_from_file_location("render_board", SCRIPT)
+    # pronouns_for lives in the shared Query, not the renderer
+    spec = importlib.util.spec_from_file_location("ledger_query", QUERY)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     people = {

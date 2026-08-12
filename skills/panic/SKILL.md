@@ -75,6 +75,23 @@ Keep the whole thing short enough to read in one breath. If there is
 genuinely nothing time-sensitive open, say that plainly and stop - do not
 manufacture urgency.
 
+## Getting the few things to show
+
+**Do not scan the whole ledger by hand.** Ask the Query, twice, and stop:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <cfg> --select slipping --json
+python3 <plugin-root>/scripts/ledger_query.py --config <cfg> --select drifting --json
+```
+
+`slipping` is already sorted flagged-first then by date, so the most
+time-sensitive items are at the top: take the few you need and ignore the rest.
+`drifting` is the drift check. `--select ready-to-close` is often the fastest
+relief available, because those need a confirmation rather than work.
+
+**Yours is the judgment:** which single item is being avoided, the one small next
+move, and the regulating tone. Never dump the full list; that is the spiral.
+
 ## Guardrails
 
 - Never auto-send, never auto-post. Any nudge or holding status offered here

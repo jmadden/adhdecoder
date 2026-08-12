@@ -65,6 +65,15 @@ See `reference/cutover.md` for the flip procedure and
 - **locate()** — resolve where the ledger lives, from config.
 - **query() / read()** — return the current promise set (open + relevant),
   each promise shaped per `ledger-schema.md`.
+  **Implemented once, in `scripts/ledger_query.py`.** Both operations live there:
+  it resolves the ledger location from config, reads the promise set (for a
+  read-only note-backed backend, the union with the builtin companion), overlays
+  `itemMeta`, and recomputes derived state. Core skills call that script rather
+  than re-deriving the read, because a second derivation of `overdue` is a second
+  answer, and the two disagree on precisely the cases the schema exists to get
+  right: an overridden `deadlineType`, a live snooze, a dismissal that a pending
+  draft outranks. The script is read-only and has no write path; every operation
+  below stays with the skills and the active backend.
 - **recordVerify(id, verifyStatus, reason, lastVerified)** — persist reconcile
   metadata (writable: on the record; read-only: into `itemMeta[<id>]`).
 - **setSnooze(id, until, note?)** — persist a snooze (same backend-scoped rule).
