@@ -66,6 +66,23 @@ parser. An empty or missing key (e.g. a blank `due:`) is ABSENT, never a grab of
 the next line's value. Confirmed needed: real notes have blank `due:` and
 `customer:` fields, and a naive line-grab mis-read them.
 
+**Never skip a note silently (fix, 2026-08-11).** A note whose frontmatter does
+not parse - no closing `---`, invalid YAML, or missing the `task` tag - is
+invisible to everything downstream: it becomes no promise, appears on no board,
+lands in no count, and no surface will ever mention it. Skipping it quietly is
+data loss that looks like an empty result.
+
+So, on every read that enumerates `tasksDir`:
+
+- Collect the failures alongside the parsed notes. Never discard them.
+- Report them by **filename and symptom** wherever the read surfaces: the
+  `doctor` record-store integrity check (its canonical home), and a one-line
+  note on any board render or sweep recap that enumerated the directory.
+- Do **not** auto-repair, in either write mode. Frontmatter damage is
+  structural, the correct fix depends on what the author meant, and a silent
+  rewrite of a file the user did not ask you to touch is worse than the bug.
+  Report the file and the one-line fix; let the user apply it.
+
 **No-due staleness fallback (fix, 2026-07-27).** On real data ~60% of open
 notes have no `due` date, many of them blocked / high-priority (the
 silent-rot zone). Date-based chasing misses all of them. So for an OPEN promise

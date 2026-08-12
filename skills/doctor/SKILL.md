@@ -58,13 +58,27 @@ Run each and report OK or a gap. Match field names to
    a connector.
    - Gap -> "chat enabled but no chat connector -> connect it or disable the
      source."
+5. **Record-store integrity** (note-backed backends). Every record in the store
+   parses and is visible to the ledger. For a note backend: each file in
+   `tasksDir` has a well-formed frontmatter block (opening AND closing
+   delimiter, valid YAML) and carries whatever marker the backend requires to
+   be enumerated.
+   - Gap -> name **every** failing file and its symptom: "`<file>`: frontmatter
+     never closes -> add the closing delimiter," or "`<file>`: YAML error ->
+     fix the syntax," or "`<file>`: missing the required tag -> the backend
+     cannot see this record."
+   - This check exists because an unparseable record is **silently invisible**:
+     it is not a promise, not on the board, not in any count, and nothing else
+     in the system will ever mention it. A single malformed file can hide real
+     work indefinitely. Report it here or it goes unreported.
+   - Validate, never repair (repair is the user's call, or `setup`'s).
 
 ## Report shape
 
 A short list: each check as **OK** or a **gap** with its one-line fix, most
-important first (config -> backend -> connectors). If everything passes, say so
-plainly and point at a first "what's slipping." If config is entirely missing,
-skip straight to "run `setup`."
+important first (config -> backend -> record-store integrity -> connectors). If
+everything passes, say so plainly and point at a first "what's slipping." If
+config is entirely missing, skip straight to "run `setup`."
 
 ## Guardrails
 
