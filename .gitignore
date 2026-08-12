@@ -13,6 +13,7 @@ instance/
 # OS cruft / editor / FUSE leftovers
 .DS_Store
 .fuse_hidden*
+__pycache__/
 
 # Keep the templates tracked (they carry no real data)
 !config/*.example.json

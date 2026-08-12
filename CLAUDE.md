@@ -27,6 +27,12 @@ Never let bucket 2 or 3 content leak into this repo.
 skills/<name>/SKILL.md        core skills (instructions FOR Claude)
 adapters/<name>/              optional backend adapters (SKILL.md + reference.md),
                               e.g. adapters/obsidian; registered in plugin.json
+scripts/render-board.py       the board renderer; implements reference/dashboard.md
+                              (pure: config + ledger + clock in, HTML out)
+scripts/tests/                fixture test + invented fixture ledger. The fixture
+                              state file is `fixtures/ledger/fixture-state.json`,
+                              NOT `state.json`, so .gitignore's instance-data
+                              guards stay intact
 reference/method.md           the durable method (the brain)
 reference/ledger-schema.md    promise record shape + itemMeta companion
 reference/*.md                per-capability specs (sweep, reconciliation,
@@ -122,6 +128,12 @@ promotion of `state.json` promises into backend records with `promoted`/
 contract (`reference/connector-adapters.md`, spec only); `markMetDraft` /
 `updateDraft` / `appliedMarkMet` in `itemMeta` plus the board's **Ready to
 close** group, so a parked decision is always visible.
+
+**No prose-only behaviour.** `reference/dashboard.md` was a prose spec with no
+implementation, so every render re-improvised it and a three-group render survived
+a four-group spec. The render now lives in `scripts/render-board.py`; skills call
+it. When behaviour is deterministic enough to be code, make it code, and change
+the spec and the script in the same commit.
 
 **No write-only drafts.** If a skill can park a pending decision in `itemMeta`,
 a surface must render it, in the same change. A draft nothing displays is

@@ -167,9 +167,10 @@
       <span><span class="dot" style="background:var(--good)"></span> Green = done</span>
       <span><span class="dot" style="background:var(--flag)"></span> Orange = flag</span>
     </div>
-    <!-- RENDER today color groups here: one .today-group per non-empty state,
-         in order Your move (blue) / Waiting (purple) / Done today (green);
-         each group's .big cards go in its .today-grid (2 columns). -->
+    <!-- RENDER today color groups here: one .today-group per non-empty state, in
+         order Ready to close (green) / Your move (blue) / Waiting (purple) /
+         Done today (green); each group's .big cards go in its .today-grid
+         (2 columns). Ready to close leads and is not optional. -->
   </div>
 
   <div class="pane" id="pane-shipped"><div class="wins"><!-- RENDER .win rows here --></div></div>
@@ -190,9 +191,13 @@
   CARD TEMPLATES - the renderer emits these from the ledger. EVERY value comes
   from the user's own ledger + config; this template stores NO data.
 
-  Today color group (one per non-empty state; label + dot color per state:
+  Today color group (one per non-empty state; label + dot color per state, in this
+  fixed order: var(--good)/"Ready to close (confirm)" green,
   var(--accent)/"Your move" blue, var(--wait)/"Waiting, no clear action" purple,
-  var(--good)/"Done today" green). Emit the state's .big cards into its .today-grid:
+  var(--good)/"Done today" green). FOUR groups, not three. Ready to close and
+  Done today share the .big.done variant (there is no fifth colour), so the GROUP
+  LABEL is what tells them apart - always emit it. Emit the state's .big cards
+  into its .today-grid:
     <div class="today-group">
       <div class="group-label"><span class="dot" style="background:var(--accent)"></span> Your move</div>
       <div class="today-grid">
@@ -200,7 +205,8 @@
       </div>
     </div>
 
-  Today card (state class: default = your move / blue; add .waiting = purple; add .done = green):
+  Today card (state class: default = your move / blue; add .waiting = purple;
+  add .done = green, used by both Ready to close and Done today):
     <div class="big">
       <span class="step">your move - SHORT_STATE_NOTE</span>
       <h3>WHAT</h3>

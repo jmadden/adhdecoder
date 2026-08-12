@@ -5,6 +5,16 @@ Two entry points follow it: the scheduled `daily-run` (its board step) and the
 on-demand `board` skill ("show my board" / "refresh the dashboard"). Written
 2026-07-28. Generic; no personal or company data.
 
+**This spec is implemented by `scripts/render-board.py`.** Both entry points call
+that script rather than re-deriving a render from this prose, which is what let a
+three-group render survive a four-group spec. Read this file to understand or
+change the behaviour; change the script in the same commit. The script is a pure
+function of (config, ledger, clock): same inputs, byte-identical HTML out, writes
+only `config.schedule.boardPath`. Because it is offline and deterministic it does
+**not** perform step 2's reconcile - the calling skill reconciles first, then
+renders. `scripts/tests/test_render_board.py` pins the acceptance criteria against
+an invented fixture ledger.
+
 The repo ships a **data-free** template at `assets/dashboard-template.html`
 (styling, 5 tabs, the state-color legend, tab-switch JS, `{{PLACEHOLDER}}` tokens,
 `<!-- RENDER ... -->` injection points, and commented CARD TEMPLATES). The

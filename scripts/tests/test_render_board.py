@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Fixture test for scripts/render-board.py.
+
+Run: python3 scripts/tests/test_render_board.py
+
+Asserts the acceptance criteria from the render spec: Ready to close renders,
+parse failures surface by filename, output is byte-identical across runs, and
+dismissed / snoozed / promoted items stay off the active tabs. The fixture
+ledger is invented data (Acme Corp / ISSUE-123 style), per the repo's no
+personal or company data rule.
+"""
+
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent.parent
+SCRIPT = REPO / "scripts" / "render-board.py"
+FIXTURES = HERE / "fixtures"
+NOW = "2026-08-12T09:15:00"
+
+FAILURES = []
+
+
+def check(condition, label):
+    print("%s %s" % ("PASS" if condition else "FAIL", label))
+    if not condition:
+        FAILURES.append(label)
+
+
+def build_instance(tmp):
+    """Copy the fixture vault + state into a temp dir and write a config for it."""
+    vault = tmp / "vault"
+    instance = tmp / "instance"
+    shutil.copytree(FIXTURES / "vault", vault)
+    # the fixture ledger is named `fixture-state.json` on purpose: the repo's
+    # .gitignore blocks `state.json` and `instance/` so real instance data can
+    # never be committed, and those guards stay intact
+    instance.mkdir()
+    shutil.copyfile(FIXTURES / "ledger" / "fixture-state.json", instance / "state.json")
+    config_path = tmp / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "identity": {"name": "Test User", "email": "test@example.com"},
+                "storage": {
+                    "adapter": "filesystem",
+                    "instancePath": str(instance),
+                    "knowledgePath": str(vault),
+                    "overrides": {"stateFile": "state.json", "tasksDir": "Tasks"},
+                },
+                "ledger": {
+                    "backend": "obsidian",
+                    "writeMode": "readwrite",
+                    "cutover": {"singleWriterConfirmed": True},
+                },
+                "schedule": {"boardPath": str(tmp / "Board.html")},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return config_path, tmp / "Board.html", vault
+
+
+def run(config_path, extra=()):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--config", str(config_path), "--now", NOW, *extra],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr)
+        raise SystemExit("render-board.py exited %d" % result.returncode)
+    return result.stdout
+
+
+def group_block(html, label):
+    """Slice out one .today-group by its label, for group-scoped assertions."""
+    marker = "</span> %s</div>" % label
+    start = html.find(marker)
+    if start < 0:
+        return ""
+    start = html.rfind('<div class="today-group">', 0, start)
+    end = html.find('<div class="today-group">', start + 1)
+    return html[start:end if end > 0 else len(html)]
+
+
+def main():
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        tmp = Path(raw_tmp)
+        config_path, board_path, vault = build_instance(tmp)
+
+        mtimes_before = {p: p.stat().st_mtime_ns for p in sorted(vault.rglob("*.md"))}
+        stdout = run(config_path)
+        first = board_path.read_bytes()
+
+        # --- determinism ---------------------------------------------------
+        board_path.unlink()
+        run(config_path)
+        check(board_path.read_bytes() == first, "byte-identical output across runs")
+
+        html = first.decode("utf-8")
+
+        # --- Ready to close renders, first, and is counted separately ------
+        ready = group_block(html, "Ready to close (confirm)")
+        check(bool(ready), "Ready to close group is present")
+        check(
+            bool(ready) and html.find(ready) == html.find('<div class="today-group">'),
+            "Ready to close is the first group on the board",
+        )
+        check(
+            "Spec the header passthrough for Gamma" in ready,
+            "a dismissed item carrying markMetDraft renders in Ready to close",
+        )
+        check(
+            "Answered on the thread on 07/21" in ready,
+            "the mark-met draft reason is the card body",
+        )
+        check(
+            "Review the Delta labeling recommendation" in ready,
+            "an item carrying updateDraft renders in Ready to close",
+        )
+        check(
+            '<span class="chip c-need">dismissed</span>' in ready,
+            "a revived dismissed item is marked as dismissed on the card",
+        )
+        check(
+            "1 item of those was dismissed from the board but still carries an unapplied draft"
+            in html,
+            "the board note counts the dismissed items a draft revived",
+        )
+        check(
+            "<b>2</b> ready to close, <b>4</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
+            in html,
+            "counts split ready-to-close out of need-your-move",
+        )
+        check(
+            "4 items need your move" in html and "2 notes could not be parsed and are not" in html,
+            "the board note agrees in number",
+        )
+        check(
+            "Provide the Mu quarterly summary" in html
+            and "Provide the Mu quarterly summary" not in group_block(html, "Your move"),
+            "a future-dated item renders on Tomorrow, not on Today",
+        )
+        check('<span class="tbadge">1</span>' in html, "the Tomorrow tab badge is filled")
+        check(
+            "your move - soft date 2026-08-01" in html
+            and "Soft date 2026-08-01, no hard deadline." in html
+            and "overdue" not in group_block(html, "Your move").split("Maintain the Nu")[-1][:400],
+            "a past soft date reads as a soft date, never as overdue",
+        )
+        move = group_block(html, "Your move")
+        check(
+            "Spec the header passthrough for Gamma" not in move,
+            "a resolved item never lands in Your move",
+        )
+
+        # --- parse failures surface ---------------------------------------
+        check(
+            "Broken frontmatter for Theta.md" in html,
+            "the unparseable note surfaces by filename in the board note",
+        )
+        check(
+            "Untagged scratch note.md" in html,
+            "a note missing the task tag surfaces rather than vanishing",
+        )
+        check(
+            "parse failure: Broken frontmatter for Theta.md" in stdout,
+            "the recap names the parse failure",
+        )
+
+        # --- suppression ---------------------------------------------------
+        check(
+            "Answer the Eta capacity question" not in html,
+            "a future snoozedUntil item is excluded from the active tabs",
+        )
+        check(
+            "Configure the Zeta test tenant" not in html,
+            "a dismissed item with no pending draft is excluded",
+        )
+        check(
+            "Lambda promoted record" not in html,
+            "a promoted state.json promise is not resurrected",
+        )
+        check(
+            "Duplicate of the Acme note" not in html,
+            "the union dedups a state.json promise into the note that owns its source",
+        )
+        check(
+            "collapsed into Tasks/Deliver the staging redirect fix to Acme.md" in stdout,
+            "the recap names every collapse, so dedup is never invisible",
+        )
+        check(
+            "1 ledger promise folded into the note that already owns its source" in html,
+            "the collapse count is on the board too, not stdout-only "
+            "(a scheduled run's stdout reaches nobody)",
+        )
+        check(
+            "Answer the Omicron header question" in html
+            and "Provide the Omicron domain list" in html,
+            "two notes citing one ticket both survive (same-store records never collapse)",
+        )
+
+        # --- card contents -------------------------------------------------
+        check(html.count('class="chip c-task"') >= 5, "every card carries a verifyStatus chip")
+        check(
+            "unverified - confirm" in html,
+            "an unverifiable item renders as unverified, not as an asserted move",
+        )
+        check(
+            "https://tracker.example.com/browse/ISSUE-123" in html,
+            "the actionable source.url is on the card, not the note link",
+        )
+        check("obsidian://open?vault=" in html, "the noteRef record link is on the card")
+        check("Zeta &amp; Sons" in html or "&amp;" in html, "ledger values are HTML-escaped")
+        check("{{" not in html, "no unfilled template tokens remain")
+        check("RENDER " not in html, "no injection-point comments remain")
+
+        # --- guardrail: never writes a note --------------------------------
+        mtimes_after = {p: p.stat().st_mtime_ns for p in sorted(vault.rglob("*.md"))}
+        check(mtimes_before == mtimes_after, "no note was written (mtimes unchanged)")
+
+    print()
+    if FAILURES:
+        print("%d check(s) failed:" % len(FAILURES))
+        for label in FAILURES:
+            print("  - %s" % label)
+        return 1
+    print("all checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

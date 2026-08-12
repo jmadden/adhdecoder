@@ -36,8 +36,9 @@ configured `pivots` (see README) or by the user on demand.
 3. **Update the ledger**: dedup, write/enrich promises + source links, per the
    `ledger` skill and the active backend. Read-only backends get
    overlay writes to the `state.json` `itemMeta` companion only, never the note.
-4. **Refresh the board file** at `config.schedule.boardPath` - render the HTML
-   dashboard from the ledger per `reference/dashboard.md` (see below).
+4. **Refresh the board file** at `config.schedule.boardPath` by running
+   `scripts/render-board.py` (see below); the script implements
+   `reference/dashboard.md`.
 5. **Recap**: one line - ledger freshness (how long since `lastSwept`, now
    refreshed), what changed, and what is newly slipping. Print to chat.
 
@@ -57,14 +58,28 @@ ledger is already fresh, skip the sweep and surface directly. See
 
 ## The board file (read-only generated view)
 
-Render the multi-tab HTML dashboard to `config.schedule.boardPath` per
-`reference/dashboard.md` (the shared render procedure - same one the on-demand
-`board` skill uses). Overwrite in place; a visible file. Scheduled runs are
-non-interactive, so this is the durable place the user looks between runs. Each
-run rebuilds the whole board from the ledger into the five tabs (Board / Shipped /
-Waiting on Others / Tomorrow's Headlines / History), so chase-in slips, drift
-flags, and handoff follow-ups all land on it, each card carrying its
-`verifyStatus` chip + `source.url` + record link.
+**Call the renderer; do not hand-render.** After step 3's reconcile pass has put
+current verdicts in the ledger:
+
+```
+python3 <plugin-root>/scripts/render-board.py --config <instance config.json>
+```
+
+`<plugin-root>` is the directory holding this skill's own `skills/` parent, resolved
+from this file's path (the version-keyed plugin cache dir in an installed instance).
+
+That is the shared implementation of `reference/dashboard.md` - the same script
+the on-demand `board` skill calls. It is deterministic and offline (it never
+reaches a source and never reconciles), writes only `config.schedule.boardPath`,
+and prints a one-line recap of group counts plus any unparseable notes. Fold that
+recap into step 5's line, parse failures included.
+
+It writes to `config.schedule.boardPath`, overwriting in place; a visible file.
+Scheduled runs are non-interactive, so this is the durable place the user looks
+between runs. Each run rebuilds the whole board from the ledger into the five tabs
+(Board / Shipped / Waiting on Others / Tomorrow's Headlines / History), so
+chase-in slips, drift flags, and handoff follow-ups all land on it, each card
+carrying its `verifyStatus` chip + `source.url` + record link.
 
 This is an INTERNAL board, so source links belong here - the radiate-out
 no-internal-links rule is customer-facing only and does not apply. If `boardPath`
