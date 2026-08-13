@@ -169,12 +169,12 @@ def main():
             "the board note counts the dismissed items a draft revived",
         )
         check(
-            "<b>2</b> ready to close, <b>5</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
+            "<b>2</b> ready to close, <b>6</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
             in html,
             "counts split ready-to-close out of need-your-move",
         )
         check(
-            "5 items need your move" in html and "2 notes could not be parsed and are not" in html,
+            "6 items need your move" in html and "3 notes could not be parsed and are not" in html,
             "the board note agrees in number",
         )
         check(

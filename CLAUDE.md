@@ -27,6 +27,9 @@ Never let bucket 2 or 3 content leak into this repo.
 skills/<name>/SKILL.md        core skills (instructions FOR Claude)
 adapters/<name>/              optional backend adapters (SKILL.md + reference.md),
                               e.g. adapters/obsidian; registered in plugin.json
+scripts/frontmatter.py        the note-frontmatter parser. Stdlib only; parses the
+                              subset real notes use and RAISES on anything else,
+                              so it can never silently misread
 scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               one-way dedup, itemMeta overlay, all derived state,
                               and the selectors the read-side skills ask for.
@@ -73,6 +76,15 @@ Repo-specific rules:
 
 ## Hard rules (do not violate)
 
+- **Stdlib only. No installable dependencies, ever.** Scripts may use Python 3
+  and its standard library and nothing else: no `pip install`, no lockfile, no
+  vendored wheel. A plugin cannot prompt for a dependency at install time, so an
+  import that needs installing becomes a failure at first use for every new
+  user - and the install command may not even work (PEP 668 rejects a plain
+  `pip install` on a Homebrew Python). Must run under Apple's `/usr/bin/python3`
+  (3.9) with an empty site-packages; `scripts/tests/` is the proof. If a task
+  seems to need a library, write the subset you need and make it **refuse** what
+  it cannot handle (see `scripts/frontmatter.py`).
 - **No personal or company data in this repo.** Rosters, ids, channels,
   incident history all belong to the instance layer.
 - **No hidden files** for state or knowledge. Visible names only.

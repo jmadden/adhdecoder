@@ -61,10 +61,32 @@ note's frontmatter + body and map to a promise via the ledger interface:
 
 Same verify spirit as the sweep: `status: done` is closed, never chase it.
 
-**Robust parsing (fix, 2026-07-27).** Parse frontmatter with a real YAML
-parser. An empty or missing key (e.g. a blank `due:`) is ABSENT, never a grab of
-the next line's value. Confirmed needed: real notes have blank `due:` and
-`customer:` fields, and a naive line-grab mis-read them.
+**Robust parsing (fix, 2026-07-27; revised 2026-08-13).** An empty or missing key
+(e.g. a blank `due:`) is ABSENT, never a grab of the next line's value. Confirmed
+needed: real notes have blank `due:` and `customer:` fields, and a naive
+line-grab mis-read them.
+
+The original wording mandated a **real YAML parser**. It now mandates
+`scripts/frontmatter.py`, which parses the subset real notes use and **raises on
+anything outside it** (block scalars, anchors, aliases, nested and flow
+mappings); a refused note is reported by filename like any other parse failure.
+The change is deliberate and is not a relaxation:
+
+- The old rule was aimed at **silence**, not at hand-rolling. A parser that
+  refuses the unfamiliar cannot silently misread. The library it replaced could:
+  it accepted two `dateModified` keys in one block and discarded a value without
+  a word.
+- Measured across a real 58-note vault, frontmatter uses six constructs and none
+  of YAML's hard parts, so the library was carrying almost no weight: it was
+  referenced on 4 lines of 1,636.
+- It was also the plugin's only installable dependency, undeclared at install
+  time, and the install command it suggested fails outright on a Homebrew Python
+  under PEP 668. Removing it makes the plugin zero-install.
+
+Equivalence is not assumed. `scripts/tests/test_frontmatter.py` carries a
+differential against PyYAML (skipped when absent, so it never becomes a
+dependency again), and the port was accepted only after all 58 real notes parsed
+equivalently and the rendered board came out byte-identical.
 
 **Never skip a note silently (fix, 2026-08-11).** A note whose frontmatter does
 not parse - no closing `---`, invalid YAML, or missing the `task` tag - is

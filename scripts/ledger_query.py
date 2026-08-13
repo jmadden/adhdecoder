@@ -32,16 +32,11 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-try:
-    import yaml
-except ModuleNotFoundError:  # pragma: no cover - environment guard
-    sys.exit(
-        "ledger_query needs a real YAML parser for note frontmatter.\n"
-        "Install it, then re-run:\n"
-        "    python3 -m pip install --user pyyaml\n"
-        "Refusing to fall back to a naive line parser: a blank `due:` would be\n"
-        "misread as the next line's value."
-    )
+# stdlib only, by hard rule: the plugin must install with no pip step. The
+# frontmatter parser lives beside this file and refuses anything it cannot parse
+# rather than guessing (see frontmatter.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from frontmatter import FrontmatterError, parse_frontmatter  # noqa: E402
 
 THEY_OWE_HINTS = (
     "chase", "follow up", "follow-up", "waiting on", "get ", "ask ", "confirm with",
@@ -230,12 +225,12 @@ def read_notes(config):
         try:
             text = note_path.read_text(encoding="utf-8")
             frontmatter_text, body = split_frontmatter(text)
-            frontmatter = yaml.safe_load(frontmatter_text)
+            frontmatter = parse_frontmatter(frontmatter_text)
             if frontmatter is None:
                 frontmatter = {}
             if not isinstance(frontmatter, dict):
                 raise ValueError("frontmatter is not a mapping")
-        except (ValueError, OSError, yaml.YAMLError) as error:
+        except (FrontmatterError, ValueError, OSError) as error:
             symptom = str(error).splitlines()[0][:160]
             failures.append({"file": note_path.name, "id": rel_id, "symptom": symptom})
             continue

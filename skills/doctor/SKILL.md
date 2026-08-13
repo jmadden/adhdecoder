@@ -31,6 +31,25 @@ This skill is **read-only**: it writes nothing and makes no live calls to source
 Run each and report OK or a gap. Match field names to
 `config/decoder.config.example.json` exactly.
 
+0. **Runtime present.** Report this FIRST, because several later checks run
+   scripts and would otherwise fail for a reason that looks like a config
+   problem:
+
+   ```
+   python3 --version
+   python3 <plugin-root>/scripts/ledger_query.py --help
+   ```
+
+   - Both succeed -> OK, name the version.
+   - `python3` not found -> gap: "install Python 3 and make sure `python3`
+     resolves; nothing needs installing with it." A plugin cannot prompt for a
+     runtime at install time, so this check is the only place a missing one
+     surfaces before it breaks a task.
+   - The script errors -> report the message verbatim. It should never be a
+     missing module: the scripts are **stdlib only** by hard rule. An
+     `ImportError` means someone reintroduced a dependency, which is a bug in the
+     plugin, not in the user's setup.
+
 1. **Config parses + required fields.** `config.json` (at
    `storage.instancePath`) is valid JSON and has `storage.instancePath`, an
    `identity`, and at least one enabled source OR a backend + identity.
@@ -64,9 +83,14 @@ Run each and report OK or a gap. Match field names to
    delimiter, valid YAML) and carries whatever marker the backend requires to
    be enumerated.
    - Gap -> name **every** failing file and its symptom: "`<file>`: frontmatter
-     never closes -> add the closing delimiter," or "`<file>`: YAML error ->
-     fix the syntax," or "`<file>`: missing the required tag -> the backend
-     cannot see this record."
+     never closes -> add the closing delimiter," or "`<file>`: missing the
+     required tag -> the backend cannot see this record," or a construct the
+     parser refuses ("block scalar (|) in key 'summary' is not supported") ->
+     rewrite that value as a plain or quoted scalar. The parser reports the
+     construct and the key by name; relay it verbatim rather than paraphrasing.
+   - Also relay any **frontmatter warning**: a record that parsed but is
+     ambiguous, e.g. a duplicate key (the last value wins and the other is
+     discarded) or a non-canonical field value.
    - This check exists because an unparseable record is **silently invisible**:
      it is not a promise, not on the board, not in any count, and nothing else
      in the system will ever mention it. A single malformed file can hide real
@@ -115,8 +139,8 @@ Run each and report OK or a gap. Match field names to
 ## Report shape
 
 A short list: each check as **OK** or a **gap** with its one-line fix, most
-important first (config -> backend -> record-store integrity -> schema ->
-connectors -> suppressions/sweep results). If
+important first (runtime -> config -> backend -> record-store integrity ->
+schema -> connectors -> suppressions/sweep results). If
 everything passes, say so plainly and point at a first "what's slipping." If
 config is entirely missing, skip straight to "run `setup`."
 

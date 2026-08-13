@@ -56,10 +56,19 @@ and leaves you a board.
 
 ## Install (Claude Code)
 
+**Prerequisite: Python 3.8 or newer on your PATH as `python3`. Nothing to
+install with it.** A few operations (the ledger read, the board render, the
+schema check) are committed scripts rather than prose, so they behave the same
+every run. They use only the Python standard library - no `pip install`, no
+virtualenv - so macOS (`/usr/bin/python3`) and any mainstream Linux already
+satisfy this. On Windows, install Python and make sure `python3` resolves.
+
 1. **Add the marketplace** - from GitHub, `/plugin marketplace add <owner>/adhdecoder`,
    or from a local clone, `/plugin marketplace add /path/to/adhdecoder`.
 2. **Install the plugin:** `/plugin install adhdecoder@adhdecoder`.
 3. **Reload:** `/reload-plugins`.
+4. **Check it:** run `doctor`. Its first check confirms `python3` resolves and the
+   scripts run, so a missing runtime is diagnosed up front rather than mid-task.
 
 No JSON to hand-edit - `setup` builds your config for you (next).
 

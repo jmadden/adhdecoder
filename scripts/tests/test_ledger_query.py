@@ -174,7 +174,8 @@ def main():
         # --- what a surface must be able to report -------------------------
         check(
             {f["file"] for f in payload["parseFailures"]}
-            == {"Broken frontmatter for Theta.md", "Untagged scratch note.md"},
+            == {"Broken frontmatter for Theta.md", "Untagged scratch note.md",
+                "Summarize the Sigma rollout.md"},
             "parse failures ride along with every query",
         )
         check(
@@ -198,6 +199,23 @@ def main():
         check(
             "Draft the Xi migration summary" in whats(q(config_path, "open")),
             "the duplicate-key note still parses and still appears (a lint, not a failure)",
+        )
+
+        # --- an unsupported construct is refused, never half-read ----------
+        refused = {f["file"]: f["symptom"] for f in payload["parseFailures"]}
+        check(
+            "block scalar (|)" in refused.get("Summarize the Sigma rollout.md", ""),
+            "a construct outside the parser's subset is refused with a precise "
+            "symptom, so the note is reported rather than silently misread",
+        )
+        check(
+            "Summarize the Sigma rollout" not in whats(q(config_path, "all")),
+            "a refused note produces no promise (it is reported, not guessed at)",
+        )
+        check(
+            "Update the Rho onboarding tracker" in whats(q(config_path, "all")),
+            "a note with a quoted scalar containing colons, escaped quotes and a "
+            "URL fragment parses correctly",
         )
 
         # --- unknown selector fails loudly ---------------------------------

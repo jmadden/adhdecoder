@@ -45,15 +45,29 @@ The notes are Markdown with YAML frontmatter, as written by the Obsidian
 - Enumerate `*.md` in `tasksDir`. Skip `Archive/` unless the user asks for it.
 - Read each note's frontmatter + body. Never open a file with intent to write.
 
-## Parse frontmatter (real YAML, never line-grab)
+## Parse frontmatter (refuse what you cannot parse, never guess)
 
-Parse each note's frontmatter with a **real YAML parser**, never line-by-line
-string matching. An empty or missing key (e.g. a blank `due:`) is **absent** -
-never read as the next line's value. Confirmed needed on real data: notes
-routinely have blank `due:` and `customer:` fields, and a naive line-grab
-misreads the following line as that field's value. Treat a key that is present
-but empty (`due:`, `due: ""`, `due: null`) identically to the key being missing
-entirely.
+**Do not write a parser and do not line-grab.** `scripts/frontmatter.py` is the
+one implementation, called by `scripts/ledger_query.py`.
+
+The rule it enforces: an empty or missing key (e.g. a blank `due:`) is
+**absent**, never read as the next line's value. Confirmed needed on real data,
+where notes routinely have blank `due:` and `customer:` fields and a naive
+line-grab misreads the following line as that field's value. A key present but
+empty (`due:`, `due: ""`, `due: null`) is identical to the key being missing.
+
+It parses the subset real notes use (scalars, dates, quoted scalars with embedded
+colons and escapes, block lists, inline lists, `[]`) and **raises on anything
+else** - a block scalar, an anchor or alias, a nested or flow mapping. A refused
+note is reported by filename through the parse-failure surface, exactly like one
+with a missing `---`.
+
+That refusal is what makes a subset parser safe. The original rule said "use a
+real YAML parser" because a hand-rolled one had silently misread; the objection
+was to the **silence**, not to hand-rolling. A parser that raises on the
+unfamiliar cannot silently misread, whereas the library it replaced accepted a
+note carrying two `dateModified` keys and quietly discarded one of the values.
+And it means the plugin installs with no `pip` step.
 
 ## Map each note to a promise
 
@@ -151,8 +165,13 @@ in the conversation** - never from a sweep or a non-interactive `daily-run`:
 
 **Write rules (hard):**
 
-- Round-trip the frontmatter with a real YAML parser; **preserve every key you
-  do not understand** and the body verbatim except the one appended line.
+- Round-trip the frontmatter **line-wise**: rewrite only the lines whose values
+  changed, and leave every other line byte-for-byte as it was, including keys you
+  do not understand and the body verbatim except the one appended line. Do not
+  re-serialise the block from a parsed dict - `scripts/frontmatter.py` reads a
+  subset and does not emit YAML, so a round-trip through it would drop whatever
+  it refused. A write that reformats a file the user did not ask you to reformat
+  is the same class of harm as an auto-repair.
 - Atomic write (write temp, replace). One file per operation.
 - Write only TaskNotes-canonical fields into the note. ADHDecoder-owned
   metadata (`snoozedUntil`, `deadlineType` override, verify results, enriched
