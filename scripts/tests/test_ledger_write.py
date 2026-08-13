@@ -206,6 +206,94 @@ def main():
         state = json.loads(state_path.read_text())
         check(len(state["sweepLog"]) <= 10, "sweepLog is capped, so a log cannot grow forever")
 
+        # --- record-verify routes correctly ------------------------------------
+        # This branch is what keeps a read-only backend read-only: a note-backed
+        # id must land in itemMeta and NEVER on the note.
+        note_id = "Tasks/Deliver the staging redirect fix to Acme.md"
+        note_mtimes = {p: p.stat().st_mtime_ns
+                       for p in sorted((tmp / "vault").rglob("*.md"))}
+        result = run(config_path, ["record-verify", "--id", note_id,
+                                   "--status", "verified-open", "--reason", "Still open"])
+        check(
+            result.returncode == 0 and "-> itemMeta" in result.stdout,
+            "a note-backed id routes its verify metadata to itemMeta",
+        )
+        state = json.loads(state_path.read_text())
+        check(
+            state["itemMeta"][note_id]["verifyReason"] == "Still open",
+            "...and the verdict actually landed there",
+        )
+        check(
+            {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
+            == note_mtimes,
+            "NO note file was written - the read-only guarantee holds",
+        )
+
+        result = run(config_path, ["record-verify", "--id", GOOD["id"],
+                                   "--status", "resolved", "--reason", "Closed upstream"])
+        check(
+            result.returncode == 0 and "-> record" in result.stdout,
+            "a state.json promise routes its verify metadata onto the record",
+        )
+
+        result = run(config_path, ["record-verify", "--id", "nothing-knows-this",
+                                   "--status", "verified-open"])
+        check(
+            result.returncode == 1 and "Query cannot see" in result.stderr,
+            "an id nothing can see is refused, so orphaned itemMeta cannot accumulate",
+        )
+        result = run(config_path, ["record-verify", "--id", GOOD["id"], "--status", "wat"])
+        check(
+            result.returncode == 1 and "--status must be one of" in result.stderr,
+            "an invalid verify status is refused",
+        )
+
+        # --- the source link reconcile found is kept ----------------------------
+        run(config_path, ["record-verify", "--id", note_id, "--status", "verified-open",
+                          "--source-url", "https://tracker.example.com/browse/FOUND-1",
+                          "--source-type", "issues", "--source-ref", "FOUND-1"])
+        state = json.loads(state_path.read_text())
+        check(
+            state["itemMeta"][note_id]["source"]["url"].endswith("FOUND-1")
+            and state["itemMeta"][note_id]["noteOnly"] is False,
+            "a discovered source link is persisted and clears noteOnly, rather "
+            "than being found and thrown away",
+        )
+
+        # --- draft-mark-met is only for records this cannot write ----------------
+        result = run(config_path, ["draft-mark-met", "--id", GOOD["id"],
+                                   "--reason", "looks done"])
+        check(
+            result.returncode == 1 and "lives in state.json" in result.stderr,
+            "parking a draft on a writable record is refused - drafts exist for "
+            "records ADHDecoder cannot write",
+        )
+        result = run(config_path, ["draft-mark-met", "--id", note_id,
+                                   "--reason", "Source says it shipped"])
+        check(result.returncode == 0, "a note-backed record accepts a mark-met draft")
+        state = json.loads(state_path.read_text())
+        check(
+            state["itemMeta"][note_id]["markMetDraft"]["reason"] == "Source says it shipped",
+            "...parked in itemMeta, where the board renders it in Ready to close",
+        )
+        check(
+            {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
+            == note_mtimes,
+            "parking a draft still writes no note",
+        )
+
+        applied_id = "Tasks/Follow up with Beta Co on the SSO answer.md"
+        state = json.loads(state_path.read_text())
+        state["itemMeta"].setdefault(applied_id, {})["appliedMarkMet"] = {
+            "ts": NOW, "completedDate": "2026-08-01", "reason": "closed earlier"}
+        state_path.write_text(json.dumps(state, indent=2))
+        result = run(config_path, ["draft-mark-met", "--id", applied_id, "--reason", "again"])
+        check(
+            result.returncode == 1 and "already has an appliedMarkMet" in result.stderr,
+            "a draft is refused over an already-completed close, so an audit "
+            "trail cannot be quietly reopened",
+        )
+
         # --- dry run touches nothing -----------------------------------------
         before_bytes = state_path.read_bytes()
         dry = dict(

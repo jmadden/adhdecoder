@@ -46,32 +46,48 @@ answer. Never answer about an item's status from memory or a search snippet.
 This is still TTL-cached and read-only: a just-verified item reuses its cached
 verdict. See `reference/verification-discipline.md`.
 
-## TTL cache (cost-aware - do not skip)
+## Plan the run (do not re-derive the TTL by hand)
 
-Do not re-hit a source for every promise on every run. Before dispatching:
+**Ask the planner what actually needs verifying.** The TTL decision, the working
+order, and the mis-attribution lookup are arithmetic:
 
-- If the promise already has a `verifyStatus` and `lastVerified` is **less
-  than ~1 day old**, reuse the cached `verifyStatus`/`reason` - skip the
-  adapter call entirely.
-- Otherwise run the adapter and refresh.
-- Within a single run, reuse a result already computed for an item this run
-  rather than calling the adapter again (e.g. when `panic` surfaces an item the
-  `drift` check already reconciled).
+```
+python3 <plugin-root>/scripts/reconcile_plan.py --config <instance config.json> \
+    --select slipping --json
+```
 
-**Persistence is backend-scoped:** persist the refreshed `lastVerified` +
-`verifyStatus` + `verifyReason` (and any upgraded `source`, see below) via the
-`ledger` skill's **Record reconcile result** operation. For a
-`state.json`-backed promise these live on the record; for a read-only-backend
-promise they go to the `state.json` `itemMeta` companion keyed by the item id
-(never the note). Either way the result is cached against the TTL above.
+It returns `verify` (each with the reason it is stale) and `cached` (each with
+the reason its verdict is still good), ordered **urgency first, then source
+weight**. Verify exactly the `verify` list; reuse the cached verdict for the
+rest. `--ttl-hours` overrides the default 24h; `--id` restricts to specific
+promises; `--select` takes any `ledger_query` selector.
 
-**Write the discovered source link back.** When an adapter locates or confirms
-the live source (the ticket, the chat permalink, the sent email/thread, the CRM
-record), return its canonical URL and write it onto the promise's `source`,
-upgrading a note-only link and clearing `noteOnly`. Same persistence split:
-builtin -> the record; a read-only backend -> `itemMeta[<id>].source` (never the note, so
-read-only holds). This keeps the real link that reconcile found instead of
-discarding it.
+Getting this wrong costs both ways: too eager and every run re-hits every source
+for nothing; too lax and a closed ticket gets chased at a real person. Within a
+single run, also reuse a result already computed this run (e.g. when `panic`
+surfaces an item `drift` already reconciled) - the planner cannot see that, so it
+is yours.
+
+## Persist the result (routed for you)
+
+**Never hand-write the verify metadata.** One command, and it decides where the
+result belongs:
+
+```
+python3 <plugin-root>/scripts/ledger_write.py --config <cfg> record-verify \
+    --id <id> --status verified-open --reason "<one line>" \
+    [--source-url <the link you found> --source-type issues --source-ref KEY]
+```
+
+A promise living in `state.json` gets it on the record; a note-backed record gets
+it in the `itemMeta` companion keyed by id, **never the note**. That branch is
+what keeps a read-only backend read-only, so it is decided in code rather than
+restated at each call site, and a test asserts no note file is written.
+
+**Pass the source link you found.** When an adapter locates or confirms the live
+source (the ticket, the chat permalink, the sent email, the CRM record), pass it
+as `--source-url`: it is persisted and clears `noteOnly`, so the real link is
+kept rather than discovered and thrown away.
 
 ## Per-source adapters
 
@@ -138,14 +154,25 @@ concrete `what` + a confirm-by date, or the user's explicit confirm. Never
 auto-send/auto-post; the flip/registration is a ledger action, and any outward
 message stays a draft. See `reference/handoff-followups.md`.
 
-## Mis-attribution check (uses config.contacts)
+## Mis-attribution signal (advisory, not a verdict)
 
-For any promise with a named `owner`/person and a `context`, check that the
-name appears in that context's `contacts.people` list (schema in
-`reference/reconciliation.md`). If it does not, the promise is
-`mis-attributed` regardless of what the adapter above would otherwise return -
-this catches a promise tagged to the wrong context/person even when the
-source itself looks fine.
+`reconcile_plan.py` reports this in `misattributionSignals`. It fires only when
+it has real evidence: the `owner` names someone who **is** on another context's
+`contacts.people` roster but not on this promise's context. Treat it as a prompt
+to confirm the context, never as a verdict - the adapter's read of the live
+source outranks it.
+
+**This is deliberately weaker than this spec originally said**, and the change
+is load-bearing. The original rule was decisive: an owner not listed in that
+context's roster made the promise `mis-attributed` regardless of the source.
+Measured against a real 31-promise ledger, that rule fired on **8 of 10**
+checkable promises and was wrong nearly every time, because real `owner` values
+are prose describing a party - a vendor (`Acme Telecom/Northwind`), a team
+(`platform triage`), an org (`Acme Corp (customer)`), or several people
+at once - not a single roster name. Shipping it as specified would have buried
+the user in false "confirm this" prompts, which is precisely the noise the whole
+product exists to remove. The evidence-only rule cut that to 2 signals, both
+worth a glance.
 
 ## Acting on results
 

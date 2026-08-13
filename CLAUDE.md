@@ -50,6 +50,9 @@ scripts/doctor_check.py       doctor's mechanical checks (config, backend, write
                               mode, record store). Reports connector presence as
                               `unchecked` rather than guessing: a subprocess
                               cannot see the session's connectors
+scripts/reconcile_plan.py     reconcile's TTL cache decision, working order, and
+                              the (advisory) mis-attribution signal. The verdicts
+                              themselves stay prose: they need a live source
 scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               one-way dedup, itemMeta overlay, all derived state,
                               and the selectors the read-side skills ask for.

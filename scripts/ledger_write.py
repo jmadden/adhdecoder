@@ -32,6 +32,9 @@ Usage:
     ledger_write.py --config CFG add            [--promise-json JSON] [--dry-run]
     ledger_write.py --config CFG enrich --id ID --note TEXT [--expect-by DATE]
                                                 [--verify-status S] [--verify-reason R]
+    ledger_write.py --config CFG record-verify --id ID --status S [--reason R]
+                                                [--source-url URL]
+    ledger_write.py --config CFG draft-mark-met --id ID --reason R
     ledger_write.py --config CFG record-sweep   [--sources-json JSON] [--now ISO]
     ledger_write.py --config CFG mark-seen --id ID [--id ID ...]
 
@@ -54,6 +57,7 @@ import ledger_query as lq  # noqa: E402
 from ledger_schema import (  # noqa: E402
     SCHEMA_VERSION,
     SWEEP_LOG_CAP,
+    VERIFY_STATUSES,
     reality_gate,
     validate_promise,
     validate_state,
@@ -330,6 +334,117 @@ def op_record_sweep(args, config, now):
     return 0
 
 
+def _route(state, promise_id):
+    """Where does ADHDecoder-owned metadata for this id belong?
+
+    A promise that lives in `state.json` keeps it on the record. Anything else -
+    a note-backed record - keeps it in the `itemMeta` companion, keyed by id.
+    This branch is the one that keeps a read-only backend read-only, so it is
+    decided here rather than restated in prose at each call site.
+    """
+    for record in state.get("promises") or []:
+        if record.get("id") == promise_id:
+            return "record", record
+    return "itemMeta", state.setdefault("itemMeta", {}).setdefault(promise_id, {})
+
+
+def op_record_verify(args, config, now):
+    if args.status not in VERIFY_STATUSES:
+        raise Refused(
+            "--status must be one of %s" % [s for s in VERIFY_STATUSES if s]
+        )
+
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    where, target = _route(state, args.id)
+
+    if where == "itemMeta" and not any(
+        p.get("id") == args.id for p in existing_union(config, now)
+    ):
+        raise Refused(
+            "no promise or note with id %r - refusing to create an itemMeta entry "
+            "for something the Query cannot see (that is how orphaned overlay "
+            "records accumulate)" % args.id
+        )
+
+    target["verifyStatus"] = args.status
+    if args.reason:
+        target["verifyReason"] = args.reason
+    target["lastVerified"] = now.isoformat(timespec="seconds")
+
+    if args.source_url:
+        # the link reconcile actually found, kept rather than discarded; on a
+        # note-backed record this upgrades the overlay, never the note
+        target["source"] = {
+            "type": args.source_type or "unknown",
+            "ref": args.source_ref,
+            "url": args.source_url,
+        }
+        target["noteOnly"] = False
+
+    if where == "record":
+        problems = validate_promise(target, enforce_reality_gate=False)
+        if problems:
+            raise Refused("refusing to record verify on %r:\n  %s"
+                          % (args.id, "\n  ".join(problems)))
+
+    if args.dry_run:
+        print("DRY RUN: would record %s on %s (%s)" % (args.status, args.id, where))
+        return 0
+
+    backup_path = backup(config.state_file, config.instance_path)
+    commit(config.state_file, state, before, backup_path, problems_before)
+    print("recorded %s for %s -> %s" % (args.status, args.id, where))
+    return 0
+
+
+def op_draft_mark_met(args, config, now):
+    """Park a 'the source says this is done' decision the user has not seen yet.
+
+    Only ever a draft: a record ADHDecoder cannot write (a read-only note) must
+    not be closed on its behalf. The board renders these in Ready to close until
+    the user acts, which is the only thing keeping the note store and reality
+    from drifting apart.
+    """
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    if not any(p.get("id") == args.id for p in existing_union(config, now)):
+        raise Refused("no promise or note with id %r" % args.id)
+
+    where, target = _route(state, args.id)
+    if where == "record":
+        raise Refused(
+            "%r lives in state.json, which ADHDecoder can write directly - use "
+            "`enrich --status met` rather than parking a draft. Drafts exist for "
+            "records this cannot write." % args.id
+        )
+
+    entry = state.setdefault("itemMeta", {}).setdefault(args.id, {})
+    if entry.get("appliedMarkMet"):
+        raise Refused(
+            "%r already has an appliedMarkMet audit entry - it was closed. "
+            "Refusing to park a new draft over a completed close." % args.id
+        )
+    entry["markMetDraft"] = {
+        "status": "done",
+        "completedDate": args.completed_date or now.date().isoformat(),
+        "reason": args.reason,
+    }
+
+    if args.dry_run:
+        print("DRY RUN: would park a markMetDraft on %s" % args.id)
+        return 0
+
+    backup_path = backup(config.state_file, config.instance_path)
+    commit(config.state_file, state, before, backup_path, problems_before)
+    print("parked markMetDraft for %s (renders in Ready to close until applied)" % args.id)
+    return 0
+
+
 def op_mark_seen(args, config, now):
     state = read_state(config.state_file)
     before = digest(config.state_file)
@@ -352,6 +467,8 @@ def op_mark_seen(args, config, now):
 OPS = {
     "add": op_add,
     "enrich": op_enrich,
+    "record-verify": op_record_verify,
+    "draft-mark-met": op_draft_mark_met,
     "record-sweep": op_record_sweep,
     "mark-seen": op_mark_seen,
 }
@@ -374,6 +491,23 @@ def main(argv=None):
     p_enrich.add_argument("--verify-status", default=None)
     p_enrich.add_argument("--verify-reason", default=None)
     p_enrich.add_argument("--status", default=None)
+
+    p_verify = sub.add_parser(
+        "record-verify",
+        help="persist a reconcile verdict, routed to the record or itemMeta")
+    p_verify.add_argument("--id", required=True)
+    p_verify.add_argument("--status", required=True)
+    p_verify.add_argument("--reason", default=None)
+    p_verify.add_argument("--source-url", default=None, help="the link reconcile found")
+    p_verify.add_argument("--source-type", default=None)
+    p_verify.add_argument("--source-ref", default=None)
+
+    p_draft = sub.add_parser(
+        "draft-mark-met",
+        help="park a 'looks done' decision for a record this cannot write")
+    p_draft.add_argument("--id", required=True)
+    p_draft.add_argument("--reason", required=True)
+    p_draft.add_argument("--completed-date", default=None)
 
     p_sweep = sub.add_parser("record-sweep", help="stamp lastSwept + append a sweepLog entry")
     p_sweep.add_argument("--sources-json", default=None, help="JSON {source: result}; stdin if omitted")

@@ -73,6 +73,23 @@ sanity-check that a promise's owner/named person actually belongs to that
 customer, catching mis-tags like the "named person not actually on this
 customer" case above.
 
+**Revision, 2026-08-14: (2) is an advisory signal, not a verdict.** As first
+written this was decisive - an owner not on the context's roster made the
+promise `mis-attributed` regardless of what the source said. Measured against a
+real 31-promise ledger it fired on **8 of 10** checkable promises and was wrong
+nearly every time: real `owner` values are prose describing a party - a vendor
+(`Acme Telecom/Northwind`), a team (`platform triage`), an org
+(`Acme Corp (customer)`), several people at once - not a single roster
+name. The original case that motivated the rule (a named individual who belongs
+to a different customer) is real, but it is a narrow slice of what the field
+actually contains.
+
+`scripts/reconcile_plan.py` therefore only speaks when it has evidence: the
+owner names someone who IS on **another** context's roster and not this one. An
+owner naming nobody recognisable is not evidence of anything. On the same real
+ledger that cut 8 signals to 2, both worth a glance. The adapter's read of the
+live source still outranks the signal in every case.
+
 ## Triggers (cost-aware, this scales across many sources)
 
 Do NOT re-verify every promise against every source every run. Reconcile a
