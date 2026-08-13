@@ -36,6 +36,16 @@ scripts/verify_note_write.py  post-write guard: re-parses a just-written note an
                               restores it from backup if the write introduced
                               damage (a duplicate key, a broken fence, a dropped
                               tag). Required after every markMet/update/promote
+scripts/ledger_schema.py      the schema as data (field sets, enums, the reality
+                              gate). Imported by BOTH the validator and the write
+                              path, so a field cannot be legal to write but
+                              unknown to `doctor`
+scripts/ledger_write.py       THE write path for state.json. Reality gate, schema
+                              check, dedup against the full union, append-only
+                              history, atomic write + backup + rollback, and a
+                              concurrent-writer guard. sweep never hand-writes JSON
+scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
+                              the once-per-day guarantee). Read-only arithmetic
 scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               one-way dedup, itemMeta overlay, all derived state,
                               and the selectors the read-side skills ask for.

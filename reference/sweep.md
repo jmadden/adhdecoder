@@ -4,6 +4,21 @@ Build input for the generic sweep skill. Drop this into the plugin repo as
 `reference/sweep.md`. Written 2026-07-27 from a live prototype against real
 Slack / email / Jira data.
 
+**The mechanical half of this spec is now code** (2026-08-14). Read this to
+understand or change the behaviour; change the script in the same commit:
+
+- **which sources a run covers** (weight order, cadence, the once-per-day
+  guarantee) is `scripts/sweep_plan.py`
+- **every write** (reality gate, schema, dedup against the full union,
+  append-only history, atomic write, rollback, concurrent-writer guard) is
+  `scripts/ledger_write.py`
+
+What stays prose, because it needs reading rather than string equality: finding
+candidates in each source, deciding whether the user owes the next move, and
+matching a candidate to an existing promise by context + topic when the refs
+differ. The split to hold is the same one as everywhere else in this repo:
+**mechanical selection is code, judgment is prose.**
+
 ## Architecture context (decided with the user, 2026-07-27)
 
 - **Generic-first.** The plugin is source-agnostic and store-agnostic. It knows

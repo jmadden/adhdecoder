@@ -24,43 +24,15 @@ import json
 import sys
 from pathlib import Path
 
-SCHEMA_VERSION = 2
-SWEEP_LOG_CAP = 10
-
-# --- what schemaVersion 2 defines -----------------------------------------
-TOP_LEVEL = {
-    "schemaVersion", "lastSwept", "promises", "dedup", "knownChannels",
-    "watchedThreads", "dismissedFromBoard", "suppressed", "people", "sweepLog",
-    "itemMeta",
-}
-PROMISE = {
-    "id", "title", "context", "direction", "what", "owner", "expectBy", "status",
-    "stakes", "stakesOverride", "source", "noteRef", "noteOnly", "created",
-    "lastVerified", "verifyStatus", "verifyReason", "why", "deadlineType",
-    "snoozedUntil", "driftClearedUntil", "history", "promotedTo", "note",
-    "completedDate", "relatedRefs",
-}
-ITEM_META = {
-    "snoozedUntil", "deadlineType", "deadlineTypeReason", "verifyStatus",
-    "verifyReason", "lastVerified", "source", "noteOnly", "dismissedFromBoard",
-    "frontmatterWarning", "markMetDraft", "updateDraft", "appliedMarkMet",
-}
-
-# --- deprecated: recognised, reported as a note, never written again ------
-DEPRECATED = {
-    "promise": {
-        "createdAt": "created",
-        "counterparty": "owner (+ note for the nuance)",
-    },
-    "itemMeta": {
-        "resolvedNotDropped": "markMetDraft",
-        "closedBy": "appliedMarkMet.by",
-        "recommendation": "updateDraft",
-        "parseError": "nothing; parse failures are detected live, never stored",
-    },
-}
-
-LEVEL_KEYS = {"top": TOP_LEVEL, "promise": PROMISE, "itemMeta": ITEM_META}
+# the schema lives in one importable module so a field cannot be legal to write
+# but unknown to this validator - see ledger_schema.py
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ledger_schema import (  # noqa: E402
+    DEPRECATED,
+    LEVEL_KEYS,
+    SCHEMA_VERSION,
+    SWEEP_LOG_CAP,
+)
 
 
 def collect(state):

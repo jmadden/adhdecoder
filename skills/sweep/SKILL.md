@@ -31,26 +31,35 @@ ADHD design principles"), and `reference/ledger-schema.md` before running.
   active **ledger backend** (default `state.json`; an optional external-store
   adapter comes later - build and prove everything on `state.json`).
 - **Reads sources, writes only the ledger.** Every promise write/update, plus
-  `dedup.seen` and `lastSwept`, goes through the ledger backend (the `ledger`
-  skill for the default `state.json`). Never write `state.json` directly.
+  `dedup.seen` and `lastSwept`, goes through `scripts/ledger_write.py`. Never
+  write `state.json` directly and never compose the JSON by hand.
 - **Never sends, posts, or auto-creates tasks** in the user's other systems.
   Maintains the ledger and produces drafts; promotion stays deliberate.
 - **Hide raw feeds.** Link to the source; never paste raw thread/email/issue
   content into the ledger.
 
-## Load config
+## Plan the run (do not re-derive the schedule)
 
-1. Read the instance `config.json` (via the `ledger` skill's Locate step).
-2. Sweep the **enabled** sources ordered by **`weight`** (high first = deepest
-   coverage / more back-stop; low = a lighter pass; array order breaks ties).
-   Source priority is config, not code: one user lives in chat, another in
-   email. `weight` shapes both order and depth.
-3. Honor each source's **`cadence`** when a caller scopes the run: always
-   include `every-run` sources; include `hourly` / `daily` sources when they are
-   due. The `daily-run` routine guarantees every enabled source is swept at
-   least once per calendar day, so nothing (even `low` / `daily`) is ignored.
-4. Read `lastSwept` to scope each source to "changed since lastSwept." First
-   run: use a sensible recent window.
+**Ask the planner which sources are due.** Weight ordering, cadence, and the
+once-per-day guarantee are arithmetic, not judgment:
+
+```
+python3 <plugin-root>/scripts/sweep_plan.py --config <instance config.json> --json
+```
+
+It returns `sweep` (ordered, each with the reason it is included) and `skip`
+(each with the reason it is not). Sweep exactly the `sweep` list, in that order.
+Add `--scope every-run` for a light intra-day pass, `--scope all` to force
+everything.
+
+The rule it enforces, which prose kept having to restate: **every enabled source
+is swept at least once per calendar day**, whatever its weight or cadence, so
+nothing is silently ignored. Per-source freshness comes from the `sweepLog`
+entry naming that source, not from the global `lastSwept` - which only says some
+sweep ran, not that this source was in it.
+
+Then scope each source's query to "changed since that source's last sweep"
+(`lastSwept` in the plan entry). First run: a sensible recent window.
 
 ## Find candidates (per source, generic)
 
@@ -181,32 +190,68 @@ are one work item - attach, do not duplicate. A match against a record with
 at (via `itemMeta` for a note-backed store) - never resurrect the collapsed
 record, never create a duplicate (`reference/promotion.md`).
 
-## Write through the ledger (reality gate applies)
+## Write through the ledger (never hand-write JSON)
 
-For a verified, de-duplicated stall, record it via the `ledger` skill's Add /
-Update operation with `direction`, a concrete `what`, a named `owner`, an
-`expectBy`, `source` ({ type, ref, url }), and `lastVerified`. `stakes` is
-computed by the ledger at read time; do not hand-set it.
+**Every write goes through `scripts/ledger_write.py`.** Do not edit `state.json`
+directly, and do not compose the JSON yourself from the schema: this runs
+unattended three times a day, and a hand-written record is the one place a
+subtle bug corrupts the ledger with nobody watching.
 
-Set `source.url` to the swept item's **canonical permalink** - the issue URL,
-the chat permalink (from channel id + message ts), the email thread, or the CRM
-record URL - never a paraphrase or a search query. Link, never paste.
+New promise:
 
-Reality gate: only write with owner + concrete `what` + `expectBy`. When the
-source implies a date (SLA/priority tier, a go-live, a due field) use it and
-note in `history` that it is an estimate to confirm. If owner, `what`, or a
-defensible date is missing, do **not** write a phantom - surface it as a
-candidate for the user to confirm.
+```
+echo '<promise JSON>' | python3 <plugin-root>/scripts/ledger_write.py \
+    --config <instance config.json> add
+```
+
+Existing promise (enrich, never duplicate):
+
+```
+python3 <plugin-root>/scripts/ledger_write.py --config <cfg> enrich \
+    --id <id> --note "<what changed and why>" [--expect-by YYYY-MM-DD] \
+    [--verify-status verified-open] [--verify-reason "..."]
+```
+
+Pass `--dry-run` first if you want to validate without writing. What it enforces
+so you do not have to:
+
+- **The reality gate.** A record without a named `owner`, a concrete `what`, and
+  an `expectBy` is refused. If a candidate cannot clear that bar, it is not a
+  promise - surface it to the user as a candidate to confirm, do not force it in.
+- **The schema.** Bad enum values, invented fields, and deprecated field names
+  are refused at write time rather than reported by `doctor` days later.
+- **Dedup against the FULL union, notes included.** A candidate whose
+  `source.url` a note already owns is refused with the id that owns it; enrich
+  that instead. This is not theoretical: writing it anyway creates a record the
+  Query collapses on every read, so it never shows on the board and lives in the
+  file forever.
+- **Append-only history**, an atomic write, a visible backup, and a rollback if
+  the result would be worse than what it replaced.
+- **Concurrent writers.** If a desktop session or another run wrote while you
+  were preparing, the write is refused rather than clobbering theirs. Re-run.
+
+Set `source.url` to the swept item's **canonical permalink** - the issue URL, the
+chat permalink (channel id + message ts), the email thread, or the CRM record URL
+- never a paraphrase or a search query. Link, never paste. When the source
+implies a date (SLA/priority tier, a go-live, a due field) use it and say in the
+history line that it is an estimate to confirm. `stakes` is computed at read
+time; do not hand-set it.
 
 ## Finish
 
-Record the sweep timestamp as `lastSwept` (through the ledger backend). Report
-the **pre-sweep freshness** - how stale the ledger was before this run (the age
-of the previous `lastSwept`) - so a caller can lead with "what changed since the
-last sweep" (see `reference/verification-discipline.md`, Rule 3, and
-`daily-run`'s session-start refresh). The resulting promises feed `chase-in`,
-`drift`, and `panic`; sweep itself surfaces nothing to any customer-facing
-surface and sends nothing.
+Stamp the run through the same write path, which also records per-source results
+so `doctor` can tell a quiet source from a broken one:
+
+```
+echo '{"chat(slack)":"ok","email(gmail)":"ok - 3 candidates","issues(jira)":"connector unavailable"}' \
+  | python3 <plugin-root>/scripts/ledger_write.py --config <cfg> record-sweep
+```
+
+Report the **pre-sweep freshness** - how stale the ledger was before this run -
+so a caller can lead with "what changed since the last sweep" (see
+`reference/verification-discipline.md` Rule 3 and `daily-run`'s session-start
+refresh). The resulting promises feed `chase-in`, `drift`, and `panic`; sweep
+surfaces nothing customer-facing and sends nothing.
 
 ## Guardrails
 
@@ -217,5 +262,7 @@ surface and sends nothing.
 - Count quiet windows in business days; never call something stale across a
   weekend or known OOO stretch.
 - Dedup hard; enrich existing promises rather than duplicating.
-- Hide raw feeds - link, never paste. No hidden files. Single writer: all
-  writes go through the ledger backend.
+- Hide raw feeds - link, never paste. No hidden files. Single writer: every
+  write goes through `scripts/ledger_write.py`, which refuses anything that
+  fails the reality gate or the schema and rolls back a write that would leave
+  the ledger worse than it found it.
