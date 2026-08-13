@@ -50,52 +50,49 @@ Run each and report OK or a gap. Match field names to
      `ImportError` means someone reintroduced a dependency, which is a bug in the
      plugin, not in the user's setup.
 
-1. **Config parses + required fields.** `config.json` (at
-   `storage.instancePath`) is valid JSON and has `storage.instancePath`, an
-   `identity`, and at least one enabled source OR a backend + identity.
-   - Missing/invalid -> "config not found or unparseable -> run `setup`."
-2. **Backend resolves + paths OK.**
-   - `builtin`: `<storage.instancePath>/<storage.overrides.stateFile>` (default
-     `state.json`) composes and its directory exists / is writable (metadata).
-   - non-builtin `X`: a `ledger-X` skill exists, and its paths resolve (e.g. a
-     note backend needs `storage.knowledgePath` + `storage.overrides.tasksDir`).
-   - Gap -> "backend `<X>` has no `ledger-<X>` skill -> install it or set backend
-     to `builtin`," or "state dir not writable -> fix the path / permissions."
-3. **Write mode coherent** (`reference/ledger-backend-interface.md`).
-   - `ledger.writeMode` absent or `readonly` -> OK (default).
-   - `readwrite` + `ledger.cutover.singleWriterConfirmed: true` -> OK; report
-     the backend as **writable (post-cutover)** and remind once: "confirm no
-     other automation still writes these files."
-   - `readwrite` WITHOUT the confirmation -> gap: "writeMode is readwrite but
-     cutover isn't confirmed - the backend stays read-only. Follow
-     `reference/cutover.md`, or set writeMode back to readonly."
-   - `readwrite` on `builtin` -> harmless; note it is ignored (builtin is
-     always writable).
-4. **Connectors present.** For each `sources[].enabled: true`, the mapped
-   `~~category` connector (per `CONNECTORS.md`) is available in the session.
-   `~~knowledge` is validated as a filesystem path (`storage.knowledgePath`), not
+1-3, 5. **Config, backend, write mode, record store.** One command; do not
+   re-derive any of it:
+
+   ```
+   python3 <plugin-root>/scripts/doctor_check.py --config <instance config.json>
+   ```
+
+   It reports each as `OK`, `GAP` (with a one-line fix) or `note`, and exits 1
+   if any gap was found, 2 if the config could not be read at all. Relay its
+   findings verbatim - especially the record-store ones, which name each failing
+   file and its exact symptom ("frontmatter never closes", "missing the `task`
+   tag", "block scalar (|) in key 'summary' is not supported"). Paraphrasing
+   loses the fix.
+
+   What it covers, and why each matters:
+   - **config** parses and has `storage.instancePath` + `identity` + either an
+     enabled source or a backend.
+   - **backend** resolves to a `ledger-<X>` skill this plugin actually ships,
+     and its paths exist and are writable. The deprecated `tasknotes` alias
+     still resolves, and is flagged rather than passing silently.
+   - **write mode** is coherent: `readwrite` without
+     `cutover.singleWriterConfirmed` is a gap, because that combination silently
+     stays read-only. On `builtin` it is a harmless note - builtin is always
+     writable.
+   - **record store**: every note parses and is visible. An unparseable record
+     is **silently invisible** - not a promise, not on the board, not in any
+     count - so a single malformed file can hide real work indefinitely. A note
+     that parsed but is ambiguous (a duplicate key, a non-canonical value)
+     reports as a note, not a gap.
+
+   Validate, never repair. The fixes are the user's call, or `setup`'s.
+
+4. **Connectors present.** This one is **yours**, and the script says so: it
+   reports connectors as `unchecked` and lists the enabled sources, because a
+   subprocess cannot see which MCP connectors the running session has attached.
+   A false all-clear here would be worse than saying nothing.
+
+   For each enabled source, confirm the mapped `~~category` connector (per
+   `CONNECTORS.md`) is actually available in this session. `~~knowledge` is a
+   filesystem path (`storage.knowledgePath`), already covered by the script, not
    a connector.
    - Gap -> "chat enabled but no chat connector -> connect it or disable the
      source."
-5. **Record-store integrity** (note-backed backends). Every record in the store
-   parses and is visible to the ledger. For a note backend: each file in
-   `tasksDir` has a well-formed frontmatter block (opening AND closing
-   delimiter, valid YAML) and carries whatever marker the backend requires to
-   be enumerated.
-   - Gap -> name **every** failing file and its symptom: "`<file>`: frontmatter
-     never closes -> add the closing delimiter," or "`<file>`: missing the
-     required tag -> the backend cannot see this record," or a construct the
-     parser refuses ("block scalar (|) in key 'summary' is not supported") ->
-     rewrite that value as a plain or quoted scalar. The parser reports the
-     construct and the key by name; relay it verbatim rather than paraphrasing.
-   - Also relay any **frontmatter warning**: a record that parsed but is
-     ambiguous, e.g. a duplicate key (the last value wins and the other is
-     discarded) or a non-canonical field value.
-   - This check exists because an unparseable record is **silently invisible**:
-     it is not a promise, not on the board, not in any count, and nothing else
-     in the system will ever mention it. A single malformed file can hide real
-     work indefinitely. Report it here or it goes unreported.
-   - Validate, never repair (repair is the user's call, or `setup`'s).
 
 6. **Schema integrity** (`reference/ledger-schema.md`). Run the validator rather
    than eyeballing the file:

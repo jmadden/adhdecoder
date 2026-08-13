@@ -46,6 +46,10 @@ scripts/ledger_write.py       THE write path for state.json. Reality gate, schem
                               concurrent-writer guard. sweep never hand-writes JSON
 scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
                               the once-per-day guarantee). Read-only arithmetic
+scripts/doctor_check.py       doctor's mechanical checks (config, backend, write
+                              mode, record store). Reports connector presence as
+                              `unchecked` rather than guessing: a subprocess
+                              cannot see the session's connectors
 scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               one-way dedup, itemMeta overlay, all derived state,
                               and the selectors the read-side skills ask for.
