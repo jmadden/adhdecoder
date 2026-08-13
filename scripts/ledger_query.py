@@ -55,8 +55,9 @@ I_OWE_HINTS = (
 # drift thresholds, in BUSINESS days, for an open promise with no expectBy
 # (on real note-backed data most open items have no date; date-only chasing
 # misses all of them, which is the silent-rot zone)
-STALE_DAYS_HIGH = 2      # blocked or high-stakes
-STALE_DAYS_ANY = 5       # any open item
+STALE_DAYS_HIGH = 2       # high-stakes AND actionable: matters, and it's on Jim
+STALE_DAYS_ANY = 5        # any other open item
+STALE_DAYS_BLOCKED = 10   # blocked: waiting on someone else, deserves patience
 DUE_SOON_DAYS = 7
 
 
@@ -448,9 +449,19 @@ def decorate(promise, now):
     promise["_completed"] = completed
     promise["_doneToday"] = bool(not is_open and completed == today)
 
-    # drift: an open promise with no date rots invisibly, so staleness stands in
-    high_signal = promise.get("stakes") == "high" or promise.get("_noteStatus") == "blocked"
-    threshold = STALE_DAYS_HIGH if high_signal else STALE_DAYS_ANY
+    # drift: an open promise with no date rots invisibly, so staleness stands in.
+    # `blocked` takes priority over stakes, in the SLOW direction: it means
+    # "waiting on someone else, nothing to do until they reply," which deserves
+    # more patience than an untouched item Jim could act on himself - not less.
+    # Conflating the two (both fast-tracked to 2 days) was the actual bug: a
+    # note correctly parked as "waiting on TEXAR" surfaced as urgent just as
+    # fast as a real high-stakes item still sitting in Jim's own queue.
+    if promise.get("_noteStatus") == "blocked":
+        threshold = STALE_DAYS_BLOCKED
+    elif promise.get("stakes") == "high":
+        threshold = STALE_DAYS_HIGH
+    else:
+        threshold = STALE_DAYS_ANY
     promise["_stale"] = bool(
         is_open and expect_by is None and promise["_staleDays"] >= threshold
     )

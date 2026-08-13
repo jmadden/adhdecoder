@@ -125,14 +125,23 @@ silent-rot zone). Date-based chasing misses all of them. So for an OPEN promise
 with no `expectBy`, drift uses a **staleness** signal instead: days since
 `lastVerified` (from `dateModified`), counted in BUSINESS days. Surface it when:
 
-- `blocked` or high-stakes AND untouched >= ~2 business days, or
-- any open item untouched >= ~5 business days.
+- high-stakes (and not `blocked`) AND untouched >= ~2 business days, or
+- any other open item untouched >= ~5 business days, or
+- `blocked` AND untouched >= ~10 business days.
+
+`blocked` is deliberately the SLOWEST tier, even above high-stakes, not the
+fastest. It means "waiting on someone else, nothing to do until they reply" -
+that deserves patience, not urgency. An earlier version of this logic
+fast-tracked `blocked` to the same 2-day tier as high-stakes (found 2026-08-14):
+a note correctly parked as "waiting on TEXAR" surfaced as urgent exactly as fast
+as something genuinely stuck in Jim's own queue, which is what produced false
+"your move" readings on items nobody was actually waiting on him for.
 
 **The thresholds live in `scripts/ledger_query.py`** (`STALE_DAYS_HIGH` /
-`STALE_DAYS_ANY`), which is what actually applies them; the numbers above are
-illustrative. Change the constant, not a document: this file and
-`skills/drift/SKILL.md` carried two different numbers for weeks and nothing
-caught it.
+`STALE_DAYS_ANY` / `STALE_DAYS_BLOCKED`), which is what actually applies them;
+the numbers above are illustrative. Change the constant, not a document: this
+file and `skills/drift/SKILL.md` carried two different numbers for weeks and
+nothing caught it.
 
 Framed observationally ("hasn't moved in N business days"), respecting
 `dismissedFromBoard` and `driftClearedUntil`. This makes no-due high/blocked

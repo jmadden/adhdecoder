@@ -95,11 +95,22 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
    a backend adapter supplies `lastVerified` - e.g. the note-backed adapter uses
    `dateModified` - this skill does the business-day math).
 4. Surface when the Query says so. The thresholds live in
-   `scripts/ledger_query.py` (`STALE_DAYS_HIGH` / `STALE_DAYS_ANY`), currently 2
-   business days for a `blocked` or high-stakes item and 5 for any other open
-   one, and `--select drifting` applies them. Do not restate the numbers here:
-   this file and the adapter reference disagreed for weeks (15 versus 5) with
-   nothing to catch it, which is what the single implementation is for.
+   `scripts/ledger_query.py` (`STALE_DAYS_HIGH` / `STALE_DAYS_ANY` /
+   `STALE_DAYS_BLOCKED`) and `--select drifting` applies them. Do not restate the
+   numbers here: this file and the adapter reference disagreed for weeks (15
+   versus 5) with nothing to catch it, which is what the single implementation
+   is for.
+
+   `blocked` and high-stakes are NOT the same signal and get opposite
+   treatment. High-stakes-and-actionable gets the SHORT threshold: it matters
+   and it is on Jim, so do not let it rot unnoticed. `blocked` gets the LONGEST
+   threshold, even when also high-stakes: it means "waiting on someone else,
+   nothing to do until they reply," which deserves patience, not urgency. An
+   earlier version of this logic fast-tracked `blocked` to the same 2-day
+   threshold as high-stakes - so a note correctly parked as "waiting on TEXAR"
+   surfaced as urgent just as fast as something genuinely stuck in Jim's own
+   queue. That was the actual complaint behind "why do things that aren't my
+   move keep showing up as my move."
 
 Present as: `<what>` (`<owner>`) hasn't moved in `<N>` business days -
 `<verifyStatus>` - `<source.url>` (a "(note)" hint if `noteOnly`; for a
@@ -160,10 +171,11 @@ python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
 ```
 
 `drifting` is business-day staleness on open items with no date (the silent-rot
-zone date-chasing misses: >= 2 business days when blocked or high-stakes, >= 5
-for anything else), plus high-stakes items already overdue or due soon. It
-honours `driftClearedUntil`, snooze and dismissal, and excludes ready-to-close.
-`derived.staleDays` is the business-day count to quote.
+zone date-chasing misses): >= 2 business days for a high-stakes item still on
+Jim, >= 5 for anything else, >= 10 for anything `blocked` (waiting on someone
+else - more patience, not less), plus high-stakes items already overdue or due
+soon. It honours `driftClearedUntil`, snooze and dismissal, and excludes
+ready-to-close. `derived.staleDays` is the business-day count to quote.
 
 **Yours is the judgment:** which of these is worth surfacing, and the
 observational framing ("hasn't moved in N business days", never an accusation).

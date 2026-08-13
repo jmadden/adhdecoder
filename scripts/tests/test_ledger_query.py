@@ -124,6 +124,18 @@ def main():
             "Answer the Eta capacity question" not in drifting,
             "drifting excludes a snoozed item",
         )
+        check(
+            "Wait on Tau Bank for the SSO answer" not in drifting,
+            "a blocked, high-stakes item untouched only 4 business days does NOT "
+            "drift (the actual bug: blocked used to share the 2-day high-stakes "
+            "threshold, so a note correctly parked as 'waiting on someone else' "
+            "surfaced exactly as fast as something genuinely stuck on Jim)",
+        )
+        check(
+            "Wait on Upsilon Bank for the vendor contact" in drifting,
+            "a blocked item DOES eventually drift once untouched >= 10 business "
+            "days - the fix is patience, not silence forever",
+        )
 
         # --- ready-to-close matches the board's rule -----------------------
         ready = whats(q(config_path, "ready-to-close"))
