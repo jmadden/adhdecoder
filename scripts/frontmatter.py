@@ -43,7 +43,7 @@ separately, because last-wins silently drops a value.
 
 import re
 
-__all__ = ["FrontmatterError", "parse_frontmatter"]
+__all__ = ["FrontmatterError", "parse_frontmatter", "duplicate_frontmatter_keys"]
 
 KEY_LINE = re.compile(r"^([A-Za-z_][\w.-]*):(?:[ \t](.*))?$")
 LIST_ITEM = re.compile(r"^[ \t]+-[ \t]+(.*)$")
@@ -123,6 +123,36 @@ def _scalar(raw, where):
     if match:
         raw = match.group(1).rstrip()
     return raw
+
+
+def duplicate_frontmatter_keys(frontmatter_text):
+    """Top-level keys that appear more than once in one frontmatter block.
+
+    A real YAML parser accepts a duplicate key and keeps the LAST value, so a
+    note carrying two `dateModified` lines parses cleanly while quietly
+    discarding one of them. Nothing downstream can tell, which makes it the same
+    class of invisible damage as a note that fails to parse: it is not wrong
+    enough to fail, so it is never mentioned.
+
+    Detected by scanning lines rather than asking the parser, because by the time
+    the parser is done the evidence is gone. Top-level only (a key at column 0),
+    since nested duplicates need the parse tree to locate meaningfully.
+
+    Lives here, not in ledger_query.py: it is a fact about frontmatter TEXT, not
+    a ledger concept, and the write-side guard (verify_note_write.py) needs the
+    identical check the read side uses. One implementation, read and write agree.
+    """
+    seen = {}
+    for line in frontmatter_text.splitlines():
+        if not line or line[0].isspace() or line.lstrip().startswith("#"):
+            continue
+        key, sep, _ = line.partition(":")
+        if not sep:
+            continue
+        key = key.strip()
+        if key:
+            seen[key] = seen.get(key, 0) + 1
+    return sorted(key for key, count in seen.items() if count > 1)
 
 
 def parse_frontmatter(text):

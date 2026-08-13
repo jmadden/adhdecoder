@@ -29,7 +29,13 @@ adapters/<name>/              optional backend adapters (SKILL.md + reference.md
                               e.g. adapters/obsidian; registered in plugin.json
 scripts/frontmatter.py        the note-frontmatter parser. Stdlib only; parses the
                               subset real notes use and RAISES on anything else,
-                              so it can never silently misread
+                              so it can never silently misread. Owns
+                              duplicate_frontmatter_keys(), shared by the read
+                              path (ledger_query.py) and the write guard
+scripts/verify_note_write.py  post-write guard: re-parses a just-written note and
+                              restores it from backup if the write introduced
+                              damage (a duplicate key, a broken fence, a dropped
+                              tag). Required after every markMet/update/promote
 scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               one-way dedup, itemMeta overlay, all derived state,
                               and the selectors the read-side skills ask for.

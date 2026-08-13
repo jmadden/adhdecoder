@@ -172,6 +172,25 @@ in the conversation** - never from a sweep or a non-interactive `daily-run`:
   subset and does not emit YAML, so a round-trip through it would drop whatever
   it refused. A write that reformats a file the user did not ask you to reformat
   is the same class of harm as an auto-repair.
+- **Back up, write, then verify - every time, no exceptions.** This rule already
+  existed in prose and was still violated: a write-back appended a new
+  `dateModified:` line without checking whether one was already there, producing
+  a note with a duplicate key that parsed cleanly while silently discarding a
+  value. Nothing caught it; it sat in the vault until a later session's read-side
+  work happened to surface it as a lint. A rule that is only prose is a rule a
+  session can get wrong under the exact conditions it exists to prevent, so
+  after every `markMet` / `update` / `promote` write, run:
+
+  ```
+  python3 <plugin-root>/scripts/verify_note_write.py --note <path> \
+      --backup <path> --restore-on-failure
+  ```
+
+  Exit 0 -> done. Exit 1 -> it already restored the pre-write file and printed
+  what broke; report that to the user rather than retrying silently. This is a
+  post-write check, not a substitute for writing carefully - it catches what the
+  line-wise-round-trip rule above was supposed to prevent, the moment it fails,
+  instead of some future session finding it by accident.
 - Atomic write (write temp, replace). One file per operation.
 - Write only TaskNotes-canonical fields into the note. ADHDecoder-owned
   metadata (`snoozedUntil`, `deadlineType` override, verify results, enriched

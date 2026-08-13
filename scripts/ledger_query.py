@@ -36,7 +36,11 @@ from pathlib import Path
 # frontmatter parser lives beside this file and refuses anything it cannot parse
 # rather than guessing (see frontmatter.py).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from frontmatter import FrontmatterError, parse_frontmatter  # noqa: E402
+from frontmatter import (  # noqa: E402
+    FrontmatterError,
+    duplicate_frontmatter_keys,
+    parse_frontmatter,
+)
 
 THEY_OWE_HINTS = (
     "chase", "follow up", "follow-up", "waiting on", "get ", "ask ", "confirm with",
@@ -152,30 +156,32 @@ def split_frontmatter(text):
     raise ValueError("no closing --- on frontmatter")
 
 
-def duplicate_frontmatter_keys(frontmatter_text):
-    """Top-level keys that appear more than once in one frontmatter block.
+CANONICAL_PRIORITIES = ("high", "medium", "low", "")
 
-    A real YAML parser accepts a duplicate key and keeps the LAST value, so a
-    note carrying two `dateModified` lines parses cleanly while quietly
-    discarding one of them. Nothing downstream can tell, which makes it the same
-    class of invisible damage as a note that fails to parse: it is not wrong
-    enough to fail, so it is never mentioned.
 
-    Detected by scanning lines rather than asking the parser, because by the time
-    the parser is done the evidence is gone. Top-level only (a key at column 0),
-    since nested duplicates need the parse tree to locate meaningfully.
+def live_frontmatter_warnings(frontmatter_text, frontmatter):
+    """Everything about THIS note's current content that a lint can catch by
+    reading it fresh. Combined and returned as one string, or None.
+
+    Deliberately separate from anything itemMeta might store: a fact this
+    function can check is always re-derived, never trusted from a stale cache.
+    Adding a new mechanical check here means it self-heals the moment the note
+    is fixed, with no reconcile pass and no itemMeta write required.
     """
-    seen = {}
-    for line in frontmatter_text.splitlines():
-        if not line or line[0].isspace() or line.lstrip().startswith("#"):
-            continue
-        key, sep, _ = line.partition(":")
-        if not sep:
-            continue
-        key = key.strip()
-        if key:
-            seen[key] = seen.get(key, 0) + 1
-    return sorted(key for key, count in seen.items() if count > 1)
+    findings = []
+    duplicates = duplicate_frontmatter_keys(frontmatter_text)
+    if duplicates:
+        findings.append(
+            "duplicate frontmatter key(s): %s - the last value wins and the "
+            "earlier one is discarded" % ", ".join(duplicates)
+        )
+    priority = str(frontmatter.get("priority") or "").strip().lower()
+    if priority not in CANONICAL_PRIORITIES:
+        findings.append(
+            "priority: %s is not a canonical TaskNotes value (expects high/medium/low)"
+            % priority
+        )
+    return "; ".join(findings) if findings else None
 
 
 def infer_direction(title):
@@ -245,7 +251,7 @@ def read_notes(config):
             )
             continue
 
-        duplicates = duplicate_frontmatter_keys(frontmatter_text)
+        live_warning = live_frontmatter_warnings(frontmatter_text, frontmatter)
         note_status = str(frontmatter.get("status") or "todo").strip().lower()
         due = as_date(frontmatter.get("due"))
         scheduled = as_date(frontmatter.get("scheduled"))
@@ -296,20 +302,12 @@ def read_notes(config):
                 "deadlineType": deadline_type,
                 "snoozedUntil": None,
                 "history": history,
-                # a duplicate key parsed cleanly but discarded a value; surface it
-                # as a lint on a record that parsed, never as a silent success
-                "frontmatterWarning": (
-                    "duplicate frontmatter key(s): %s - the last value wins and the "
-                    "earlier one is discarded" % ", ".join(duplicates)
-                    if duplicates
-                    else None
-                ),
-                "_structuralWarning": (
-                    "duplicate frontmatter key(s): %s - the last value wins and the "
-                    "earlier one is discarded" % ", ".join(duplicates)
-                    if duplicates
-                    else None
-                ),
+                # everything this function can catch by reading the note fresh;
+                # never a silent success, and never allowed to go stale (see
+                # `_liveWarning` handling in query() - a live check always wins)
+                "frontmatterWarning": live_warning,
+                "_liveWarning": live_warning,
+                "_frontmatterDate": frontmatter.get("dateModified"),
                 "_origin": "note",
                 "_noteStatus": note_status,
             }
@@ -512,6 +510,8 @@ def query(config, now):
         record = dict(promise)
         record["_origin"] = "state"
         record.setdefault("_noteStatus", None)
+        record.setdefault("_liveWarning", None)
+        record.setdefault("_frontmatterDate", None)
         state_promises.append(record)
 
     records, collapsed = union(notes, state_promises)
@@ -525,21 +525,36 @@ def query(config, now):
         for field in (
             "verifyStatus", "verifyReason", "lastVerified", "snoozedUntil",
             "deadlineType", "deadlineTypeReason", "why", "noteOnly",
-            "frontmatterWarning", "markMetDraft", "updateDraft", "appliedMarkMet",
+            "markMetDraft", "updateDraft", "appliedMarkMet",
         ):
             if field in meta and meta[field] is not None:
                 promise[field] = meta[field]
         if isinstance(meta.get("source"), dict) and meta["source"].get("url"):
             promise["source"] = meta["source"]
-        # a structural warning is read off the file itself, so an itemMeta warning
-        # must not replace it; both are true and both need saying
-        structural = promise.pop("_structuralWarning", None)
-        if structural:
-            existing = promise.get("frontmatterWarning")
-            promise["frontmatterWarning"] = (
-                structural if not existing or existing == structural
-                else "%s; %s" % (structural, existing)
-            )
+
+        # frontmatterWarning is handled separately from the blind overlay above,
+        # on purpose: it is a claim about the note's CURRENT content, so a stored
+        # copy is only trustworthy if the note has not been touched since it was
+        # recorded. Without this, a fixed note keeps showing a warning forever -
+        # exactly the write-once-stale bug schemaVersion 2 removed `parseError`
+        # for, reintroduced through this field instead. A live check (this read,
+        # this file) always wins over a stored one for whatever it can verify.
+        live_warning = promise.pop("_liveWarning", None)
+        frontmatter_date = promise.pop("_frontmatterDate", None)
+        stored_warning = meta.get("frontmatterWarning")
+        stored_at = meta.get("lastVerified")
+        stored_is_current = bool(
+            stored_warning
+            and (not frontmatter_date or not stored_at or frontmatter_date <= stored_at)
+        )
+        if live_warning and stored_is_current and stored_warning != live_warning:
+            promise["frontmatterWarning"] = "%s; %s" % (live_warning, stored_warning)
+        elif live_warning:
+            promise["frontmatterWarning"] = live_warning
+        elif stored_is_current:
+            promise["frontmatterWarning"] = stored_warning
+        else:
+            promise["frontmatterWarning"] = None
         promise["_dismissed"] = (
             promise["id"] in dismissed_ids or bool(meta.get("dismissedFromBoard"))
         )

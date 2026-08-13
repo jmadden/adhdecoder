@@ -13,7 +13,11 @@
       "status": "pending",
       "stakes": "normal",
       "stakesOverride": null,
-      "source": { "type": "email", "ref": "thread-789", "url": "https://mail.example.com/thread/789" },
+      "source": {
+        "type": "email",
+        "ref": "thread-789",
+        "url": "https://mail.example.com/thread/789"
+      },
       "noteRef": null,
       "noteOnly": false,
       "created": "2026-07-31T10:00:00-07:00",
@@ -25,9 +29,16 @@
       "snoozedUntil": null,
       "driftClearedUntil": null,
       "note": "Finance replied on the 9th asking which cost centre owns the split, and nobody has answered them yet.",
-      "relatedRefs": ["ISSUE-790"],
+      "relatedRefs": [
+        "ISSUE-790"
+      ],
       "createdAt": "2026-07-31T10:00:00-07:00",
-      "history": [{ "ts": "2026-07-31T10:00:00-07:00", "note": "Promise captured." }]
+      "history": [
+        {
+          "ts": "2026-07-31T10:00:00-07:00",
+          "note": "Promise captured."
+        }
+      ]
     },
     {
       "id": "ISSUE-123:acme-staging-redirect",
@@ -40,7 +51,11 @@
       "status": "pending",
       "stakes": "normal",
       "stakesOverride": null,
-      "source": { "type": "issues", "ref": "ISSUE-123", "url": "https://tracker.example.com/browse/ISSUE-123" },
+      "source": {
+        "type": "issues",
+        "ref": "ISSUE-123",
+        "url": "https://tracker.example.com/browse/ISSUE-123"
+      },
       "noteRef": null,
       "noteOnly": false,
       "created": "2026-07-28T10:00:00-07:00",
@@ -64,7 +79,11 @@
       "status": "met",
       "stakes": "normal",
       "stakesOverride": null,
-      "source": { "type": "issues", "ref": "ISSUE-321", "url": "https://tracker.example.com/browse/ISSUE-321" },
+      "source": {
+        "type": "issues",
+        "ref": "ISSUE-321",
+        "url": "https://tracker.example.com/browse/ISSUE-321"
+      },
       "noteRef": null,
       "noteOnly": false,
       "completedDate": "2026-08-11",
@@ -90,7 +109,11 @@
       "promotedTo": "Tasks/Configure the Zeta test tenant.md",
       "stakes": "normal",
       "stakesOverride": null,
-      "source": { "type": "issues", "ref": "ISSUE-654", "url": "https://tracker.example.com/browse/ISSUE-654" },
+      "source": {
+        "type": "issues",
+        "ref": "ISSUE-654",
+        "url": "https://tracker.example.com/browse/ISSUE-654"
+      },
       "noteRef": null,
       "noteOnly": false,
       "created": "2026-08-01T10:00:00-07:00",
@@ -104,10 +127,14 @@
       "history": []
     }
   ],
-  "dedup": { "seen": [] },
+  "dedup": {
+    "seen": []
+  },
   "knownChannels": [],
   "watchedThreads": [],
-  "dismissedFromBoard": ["Tasks/Spec the header passthrough for Gamma.md"],
+  "dismissedFromBoard": [
+    "Tasks/Spec the header passthrough for Gamma.md"
+  ],
   "suppressed": [
     {
       "ref": "ISSUE-000",
@@ -125,7 +152,13 @@
     }
   },
   "sweepLog": [
-    { "ts": "2026-08-12T06:00:00-07:00", "sources": { "issues(tracker)": "ok", "email(mail)": "ok" } }
+    {
+      "ts": "2026-08-12T06:00:00-07:00",
+      "sources": {
+        "issues(tracker)": "ok",
+        "email(mail)": "ok"
+      }
+    }
   ],
   "unknownTopLevelField": "a field no schema version defines",
   "itemMeta": {
@@ -158,8 +191,9 @@
     },
     "Tasks/Configure the Zeta test tenant.md": {
       "verifyStatus": "verified-open",
-      "lastVerified": "2026-08-11T10:00:00-07:00",
-      "dismissedFromBoard": true
+      "lastVerified": "2026-08-01T00:00:00-07:00",
+      "dismissedFromBoard": true,
+      "frontmatterWarning": "priority: normal is not a canonical TaskNotes value (expects high/medium/low)"
     },
     "Tasks/Deliver the staging redirect fix to Acme.md": {
       "verifyStatus": "unverifiable",

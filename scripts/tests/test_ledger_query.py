@@ -188,6 +188,21 @@ def main():
             "cross-store collapses ride along with every query",
         )
 
+        # --- a stored frontmatterWarning must not outlive the note it describes
+        warned_files = {w["file"] for w in payload["frontmatterWarnings"]}
+        check(
+            "Configure the Zeta test tenant.md" not in warned_files,
+            "a stored itemMeta.frontmatterWarning recorded BEFORE the note's "
+            "current dateModified is treated as stale and dropped, never shown "
+            "forever (this is the exact bug: a fixed note kept showing a "
+            "priority warning because nothing ever re-checked it)",
+        )
+        check(
+            "Follow up with Beta Co on the SSO answer.md" in warned_files,
+            "a stored warning recorded AFTER the note's dateModified (nothing "
+            "changed since) still shows - staleness cuts one way only",
+        )
+
         # --- a duplicate key parses cleanly but must not pass silently -----
         warned = {w["file"]: w["warning"] for w in payload["frontmatterWarnings"]}
         check(

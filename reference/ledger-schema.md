@@ -109,8 +109,28 @@ work as open.
 - **frontmatterWarning** — a lint on a record that **parsed**: a non-canonical
   value, or a field contradicting the title. Surfaced in the board note beside
   parse failures. Distinct from a parse *failure*, which makes a record
-  invisible and is detected live on every read (never stored, because a stored
-  copy goes stale the moment the file is fixed).
+  invisible and is detected live on every read, never stored.
+
+  Two sources, two rules:
+  - **Anything mechanically checkable** (duplicate frontmatter keys, a
+    non-canonical `priority`) is recomputed **live on every read** in
+    `scripts/ledger_query.py`, never trusted from storage even if a stale copy
+    is present. This is what makes it self-healing: fix the note, the warning
+    is gone next read, no reconcile pass or itemMeta write required.
+  - **Anything only a human or `reconcile` can judge** (a title contradicting
+    the `customer` field) may be written here as a one-time finding. It is
+    subject to a **staleness check**: if the note's `dateModified` is newer
+    than this field's `lastVerified`, the note has been touched since the
+    finding was recorded and the stored warning is dropped rather than shown
+    with no way to know if it still holds.
+
+  This distinction exists because a stored `frontmatterWarning` silently
+  outlived the note it described: a run recorded "priority: normal is not
+  canonical," the user fixed the note days later, and the warning kept showing
+  on every subsequent board because nothing ever re-checked it. It is the exact
+  write-once-stale bug `parseError` was deprecated for, reintroduced through
+  this field. Moving the mechanical half to live detection and gating the
+  judged half on `dateModified` closes both paths.
 - **dismissedFromBoard** — per-item form of the top-level list; see above.
 
 Invariant: **no overlay field is write-only.** If a run can write a field here,
