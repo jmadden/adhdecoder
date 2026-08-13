@@ -90,8 +90,10 @@ each run (no hand-maintained board state); link, never paste raw feeds.
 
 ## Guardrails
 
-- Only `state.json` and the board file are written. Read-only against read-only backends
-  and every source (enrichment lands in `state.json` / `itemMeta`).
+- Only `state.json` and the board file are written. Read-only against read-only
+  backends and every source (enrichment lands in `state.json` / `itemMeta`).
+- **Never `capture` or `promote`.** Both create notes and require `--confirmed`,
+  an explicit human action. A scheduled run creates no notes in any write mode.
 - Never auto-send / auto-post / auto-create tasks elsewhere.
 - Weight is secondary to urgency (stakes > time > weight); every enabled source
   is swept at least once per day - no source is ignored.

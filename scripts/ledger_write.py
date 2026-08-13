@@ -29,6 +29,9 @@ What this guarantees, on every operation:
    run, a scheduled run) wrote in between, this refuses rather than clobbering.
 
 Usage:
+    ledger_write.py --config CFG capture --confirmed --title T [--customer C]
+                                                [--due YYYY-MM-DD] [--summary S]
+    ledger_write.py --config CFG promote --confirmed --id ID
     ledger_write.py --config CFG add            [--promise-json JSON] [--dry-run]
     ledger_write.py --config CFG enrich --id ID --note TEXT [--expect-by DATE]
                                                 [--verify-status S] [--verify-reason R]
@@ -46,6 +49,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -54,6 +58,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ledger_query as lq  # noqa: E402
+import verify_note_write  # noqa: E402
 from ledger_schema import (  # noqa: E402
     SCHEMA_VERSION,
     SWEEP_LOG_CAP,
@@ -334,6 +339,185 @@ def op_record_sweep(args, config, now):
     return 0
 
 
+ILLEGAL_FILENAME = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
+
+
+TITLE_MAX = 120
+
+
+def _note_filename(title):
+    """A safe filename from a title. Refuses rather than inventing one.
+
+    A too-long title is refused, not truncated. The title becomes the filename,
+    the note's headline in the sidebar, and the promise id - truncating a
+    paragraph to 120 characters produces a bad value for all three, silently.
+    Promoting a `what` written as a paragraph should stop and ask for a real
+    headline instead.
+    """
+    cleaned = ILLEGAL_FILENAME.sub("", str(title)).strip().rstrip(".")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    if not cleaned:
+        raise Refused("the title contains no usable filename characters: %r" % title)
+    if len(cleaned) > TITLE_MAX:
+        raise Refused(
+            "the title is %d characters; a note title is a headline, and it also "
+            "becomes the filename and the promise id.\nPass --title with something "
+            "under %d characters. The full text is kept in the summary.\n  got: %s..."
+            % (len(cleaned), TITLE_MAX, cleaned[:80])
+        )
+    return cleaned + ".md"
+
+
+_YAML_RESERVED = {
+    "y", "n", "yes", "no", "true", "false", "on", "off", "null", "~", "",
+}
+
+
+def _yaml_scalar(value):
+    """Emit a value that a REAL YAML parser reads back as this exact string.
+
+    Load-bearing, and not obvious. `frontmatter.py` is permissive about a plain
+    scalar containing ": ", but PyYAML and Obsidian both reject it outright
+    ("mapping values are not allowed here"). Writing an unquoted title like
+    "Acme Corp: explain the options" would therefore produce a note THIS system
+    reads happily and the user's own editor cannot open at all - the worst
+    possible failure, because nothing here would report it.
+
+    Also quotes the values YAML would coerce to a non-string: a title of "yes"
+    becomes a boolean, "#tag" becomes a comment, "2026" becomes an int.
+    """
+    text = str(value)
+    if "\n" in text or "\r" in text:
+        raise Refused("a frontmatter value may not contain a newline: %r" % text)
+    needs_quoting = (
+        text.strip() != text
+        or text.lower() in _YAML_RESERVED
+        or text[:1] in "#&*!|>%@`[]{},\"'?-"
+        or ": " in text
+        or text.endswith(":")
+        or re.fullmatch(r"-?\d+(\.\d+)?", text) is not None
+    )
+    if not needs_quoting:
+        return text
+    return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _note_body(title, summary, requester, source_url):
+    lines = ["> **Summary:** %s" % (summary or title)]
+    if requester and requester.strip().lower() != "self":
+        lines.append("> Report to: %s" % requester)
+    lines.append("")
+    if source_url:
+        lines.append("- Source: [link](%s)" % source_url)
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _note_text(fields, body):
+    """Canonical TaskNotes frontmatter, in the field order real notes use.
+
+    Written line-wise rather than serialised from a dict: `frontmatter.py` reads
+    a subset and does not emit YAML, and hand-building the block keeps the output
+    byte-predictable and identical in shape to what TaskNotes itself writes.
+    """
+    out = ["---"]
+    for key in ("title", "status", "priority", "due", "scheduled",
+                "dateCreated", "dateModified"):
+        value = fields.get(key)
+        if value:
+            out.append("%s: %s" % (key, _yaml_scalar(value)))
+    projects = fields.get("projects") or []
+    if projects:
+        out.append("projects:")
+        out.extend("  - %s" % _yaml_scalar(p) for p in projects)
+    else:
+        out.append("projects: []")
+    if fields.get("customer"):
+        out.append("customer: %s" % _yaml_scalar(fields["customer"]))
+    requester = fields.get("requester")
+    if requester:
+        out.append("requester:")
+        out.append("  - %s" % _yaml_scalar(requester))
+    out.append("tags:")
+    out.append("  - task")
+    out.append("---")
+    out.append("")
+    out.append(body)
+    return "\n".join(out) + "\n"
+
+
+def _write_note(config, now, fields, body, source_url, exclude_id=None):
+    """Create ONE new note in tasksDir. Shared by `capture` and `promote`.
+
+    Deliberately writes no `state.json`: the Query enumerates tasksDir on the
+    next read, so a captured task simply appears. That keeps note creation off
+    the contended ledger file entirely.
+    """
+    if not config.readwrite:
+        raise Refused(
+            "creating a note needs `writeMode: readwrite` AND "
+            "`cutover.singleWriterConfirmed: true` (see reference/cutover.md).\n"
+            "Under readonly, ADHDecoder writes nothing to the vault by design."
+        )
+    if not config.tasks_dir.is_dir():
+        raise Refused("the notes directory does not exist: %s" % config.tasks_dir)
+
+    filename = _note_filename(fields["title"])
+    target = config.tasks_dir / filename
+    if target.exists():
+        raise Refused(
+            "a note named %r already exists - refusing to overwrite it.\n"
+            "Give the task a different title, or enrich the existing note."
+            % filename
+        )
+
+    if source_url:
+        for existing in existing_union(config, now):
+            # `promote` carries the promise's OWN url onto the new note, so the
+            # record being collapsed must not count as a collision with itself
+            if exclude_id and existing.get("id") == exclude_id:
+                continue
+            existing_url = (existing.get("source") or {}).get("url")
+            if existing_url == source_url and not existing.get("noteOnly"):
+                raise Refused(
+                    "source.url is already owned by %r - enrich that instead of "
+                    "creating a second record for the same item"
+                    % existing.get("id")
+                )
+
+    text = _note_text(fields, body)
+
+    handle = tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=str(config.tasks_dir), prefix=".capture-",
+        suffix=".tmp", delete=False,
+    )
+    try:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+        handle.close()
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(handle.name, 0o666 & ~umask)
+        os.replace(handle.name, target)
+    except BaseException:
+        handle.close()
+        if os.path.exists(handle.name):
+            os.unlink(handle.name)
+        raise
+
+    # same post-write gate the write-back rule requires; a bad write leaves no
+    # debris behind rather than a half-formed note nobody notices
+    problems = verify_note_write.check(target)
+    if problems:
+        target.unlink()
+        raise Refused(
+            "the note failed its post-write check and was removed:\n  %s"
+            % "\n  ".join(problems)
+        )
+    return target
+
+
 def _route(state, promise_id):
     """Where does ADHDecoder-owned metadata for this id belong?
 
@@ -445,6 +629,130 @@ def op_draft_mark_met(args, config, now):
     return 0
 
 
+def _fields_from(args, now):
+    stamp = now.isoformat(timespec="seconds")
+    return {
+        "title": args.title,
+        "status": "todo",
+        "priority": args.priority or "medium",
+        "due": args.due,
+        "dateCreated": stamp,
+        "dateModified": stamp,
+        "projects": list(args.project or []),
+        "customer": args.customer,
+        "requester": args.requester or "Self",
+    }
+
+
+def op_capture(args, config, now):
+    """Capture a task straight into the note store, where the user actually works.
+
+    No `expectBy` is required, and that is deliberate rather than a hole in the
+    reality gate: the gate governs `state.json` promises, which must be chaseable.
+    A note legitimately has no `due` - on real data most do not - and drift
+    staleness surfaces those instead. Forcing a date on every quick capture would
+    put friction on exactly the thing that has to be frictionless.
+    """
+    if not args.confirmed:
+        raise Refused(
+            "`capture` writes a note, so it needs --confirmed: an explicit human "
+            "action. Sweeps and scheduled runs never create notes, in any write mode."
+        )
+    if not str(args.title or "").strip():
+        raise Refused("--title is required: it is the concrete thing to be done")
+
+    fields = _fields_from(args, now)
+    body = _note_body(args.title, args.summary, fields["requester"], args.source_url)
+
+    if args.dry_run:
+        print("DRY RUN: would create %s\n" % (config.tasks_dir / _note_filename(args.title)))
+        print(_note_text(fields, body))
+        return 0
+
+    target = _write_note(config, now, fields, body, args.source_url)
+    print("captured: %s" % target)
+    print("(no state.json write - the Query picks it up on the next read)")
+    return 0
+
+
+def op_promote(args, config, now):
+    """Turn a state.json promise into a real note, then collapse the original.
+
+    Per reference/promotion.md: the record is kept (history is append-only),
+    marked `promoted`, and given `promotedTo` so a later sweep enriches the note
+    rather than resurrecting the collapsed record.
+    """
+    if not args.confirmed:
+        raise Refused("`promote` creates a note, so it needs --confirmed")
+
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    source_record = None
+    for record in state.get("promises") or []:
+        if record.get("id") == args.id:
+            source_record = record
+            break
+    if source_record is None:
+        raise Refused("no state.json promise with id %r" % args.id)
+    if source_record.get("status") == "promoted":
+        raise Refused(
+            "%r is already promoted into %r" % (args.id, source_record.get("promotedTo"))
+        )
+
+    title = args.title or source_record.get("title") or source_record.get("what")
+    fields = _fields_from(args, now)
+    fields["title"] = title
+    fields["customer"] = args.customer or source_record.get("context")
+    fields["due"] = args.due or source_record.get("expectBy")
+    # `requester` means "who asked for this". On an i-owe-them promise `owner` is
+    # the user themselves, so copying it across produces "Report to: <the user>".
+    # Only a they-owe-me promise has a counterparty worth carrying over, and even
+    # then owner is often prose; --requester overrides when it matters.
+    if args.requester:
+        fields["requester"] = args.requester
+    elif source_record.get("direction") == "they-owe-me":
+        fields["requester"] = source_record.get("owner") or "Self"
+    else:
+        fields["requester"] = "Self"
+
+    url = args.source_url or (source_record.get("source") or {}).get("url")
+    body = _note_body(title, args.summary or source_record.get("note"),
+                      fields["requester"], url)
+
+    if args.dry_run:
+        print("DRY RUN: would create %s and collapse %s\n"
+              % (config.tasks_dir / _note_filename(title), args.id))
+        print(_note_text(fields, body))
+        return 0
+
+    # the note is created FIRST; only a real note earns the collapse
+    target = _write_note(config, now, fields, body, url, exclude_id=args.id)
+    note_id = str(target.relative_to(config.knowledge_path))
+
+    source_record["status"] = "promoted"
+    source_record["promotedTo"] = note_id
+    source_record.setdefault("history", []).append({
+        "ts": now.isoformat(timespec="seconds"),
+        "note": "Promoted into %s; this record collapses to a cross-reference." % note_id,
+    })
+
+    try:
+        backup_path = backup(config.state_file, config.instance_path)
+        commit(config.state_file, state, before, backup_path, problems_before)
+    except Refused:
+        # the note exists but the ledger could not be updated; say so plainly
+        # rather than leaving the user to discover a duplicate later
+        raise Refused(
+            "the note was created at %s, but collapsing %r in state.json failed.\n"
+            "Re-run `promote` after resolving that, or the item will show twice."
+            % (target, args.id)
+        )
+    print("promoted %s -> %s" % (args.id, note_id))
+    return 0
+
+
 def op_mark_seen(args, config, now):
     state = read_state(config.state_file)
     before = digest(config.state_file)
@@ -465,6 +773,8 @@ def op_mark_seen(args, config, now):
 
 
 OPS = {
+    "capture": op_capture,
+    "promote": op_promote,
     "add": op_add,
     "enrich": op_enrich,
     "record-verify": op_record_verify,
@@ -483,6 +793,26 @@ def main(argv=None):
 
     p_add = sub.add_parser("add", help="record a new promise (reality gate enforced)")
     p_add.add_argument("--promise-json", default=None, help="JSON object; stdin if omitted")
+
+    def _note_args(parser_obj, title_required):
+        parser_obj.add_argument("--title", required=title_required)
+        parser_obj.add_argument("--customer", default=None)
+        parser_obj.add_argument("--requester", default=None, help="defaults to Self")
+        parser_obj.add_argument("--due", default=None, help="YYYY-MM-DD; omit when unknown")
+        parser_obj.add_argument("--priority", default=None, choices=("high", "medium", "low"))
+        parser_obj.add_argument("--project", action="append", default=None)
+        parser_obj.add_argument("--summary", default=None)
+        parser_obj.add_argument("--source-url", default=None)
+        parser_obj.add_argument("--confirmed", action="store_true",
+                                help="required: a note write is an explicit human action")
+
+    p_capture = sub.add_parser("capture", help="create a task note in the note store")
+    _note_args(p_capture, title_required=True)
+
+    p_promote = sub.add_parser(
+        "promote", help="turn a state.json promise into a note, then collapse it")
+    p_promote.add_argument("--id", required=True)
+    _note_args(p_promote, title_required=False)
 
     p_enrich = sub.add_parser("enrich", help="update an existing promise, append-only")
     p_enrich.add_argument("--id", required=True)

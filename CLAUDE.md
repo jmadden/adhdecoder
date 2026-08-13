@@ -40,10 +40,14 @@ scripts/ledger_schema.py      the schema as data (field sets, enums, the reality
                               gate). Imported by BOTH the validator and the write
                               path, so a field cannot be legal to write but
                               unknown to `doctor`
-scripts/ledger_write.py       THE write path for state.json. Reality gate, schema
+scripts/ledger_write.py       THE write path. state.json ops (reality gate, schema
                               check, dedup against the full union, append-only
-                              history, atomic write + backup + rollback, and a
-                              concurrent-writer guard. sweep never hand-writes JSON
+                              history, atomic write + backup + rollback, a
+                              concurrent-writer guard) PLUS note creation:
+                              `capture` (add a task where the user works) and
+                              `promote` (state.json promise -> note, then
+                              collapse). Note ops need --confirmed, so no
+                              unattended run can create one
 scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
                               the once-per-day guarantee). Read-only arithmetic
 scripts/doctor_check.py       doctor's mechanical checks (config, backend, write

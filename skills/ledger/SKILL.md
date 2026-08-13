@@ -38,17 +38,58 @@ record shape before writing.
 
 ## Operations
 
-**Add a promise.** Enforce the reality gate: require `direction`, a concrete
-`what`, a named `owner`, and an `expectBy` date. If any is missing, ask for it;
-do not invent it and do not log a partial promise. Build the record per the
-schema, set `status: pending`, stamp `created`/`lastVerified`, seed `history`
-with one "Promise captured." line, then write.
+**Never hand-write `state.json` or a note.** Every operation below runs through
+`scripts/ledger_write.py`, which enforces the reality gate and the schema, dedups
+against the full union (notes included), keeps history append-only, writes
+atomically with a backup, and refuses if another session wrote meanwhile.
 
-**Update / log progress.** Append a `{ ts, note }` to `history`. Refresh
-`lastVerified`. Never rewrite prior history.
+**Capture a task (note backend, the common case).** When the user says "add a
+task", "remind me to…", "I need to…" and the backend is note-backed, put it where
+they actually work - a real note - rather than in `state.json` where it is
+invisible to them:
 
-**Mark met / cleared.** Set `status: met` (delivered/received) or `cleared`
-(handled outside the system). Add a history line. Never delete the record.
+```
+python3 <plugin-root>/scripts/ledger_write.py --config <cfg> capture --confirmed \
+    --title "<short headline>" [--customer "<context>"] [--requester "<who asked>"] \
+    [--due YYYY-MM-DD] [--priority high|medium|low] [--summary "<one or two lines>"] \
+    [--source-url <link>]
+```
+
+**No `--due` is required, and that is not a loophole.** The reality gate governs
+`state.json` promises, which must be chaseable. A note legitimately has no due
+date - most real ones do not - and drift staleness surfaces those instead. Do not
+interrogate the user for a deadline they do not have; ask only if they imply one.
+`--title` is a headline: it becomes the filename and the promise id, so a
+paragraph is refused. Put the detail in `--summary`.
+
+**Add a `state.json` promise.** For something that should NOT become a note -
+typically a sweep-found `they-owe-me` stall - use `add` instead, which does
+enforce the full reality gate (`direction` + concrete `what` + named `owner` +
+`expectBy`; ask for whatever is missing, never invent it):
+
+```
+echo '<promise JSON>' | python3 <plugin-root>/scripts/ledger_write.py --config <cfg> add
+```
+
+**Promote a `state.json` promise into a note.** When a stranded promise should
+live where the user works:
+
+```
+python3 <plugin-root>/scripts/ledger_write.py --config <cfg> promote --confirmed \
+    --id <id> --title "<short headline>"
+```
+
+Always `--dry-run` first and show the note verbatim; the user approves before it
+is created. The original record is kept, marked `promoted`, and given
+`promotedTo`, so a later sweep enriches the note instead of resurrecting it.
+
+**Update / log progress.** `ledger_write.py … enrich --id <id> --note "<what
+changed>"` - history is append-only and the script enforces it.
+
+**Mark met / cleared.** `enrich --id <id> --status met --note "…"` (delivered or
+received) or `--status cleared` (handled outside the system). Never delete a
+record. For a record ADHDecoder cannot write (a read-only note), park a
+`draft-mark-met` instead, which the board renders in **Ready to close**.
 
 **Set snooze.** Set `snoozedUntil` to a date (temporary per-item dismiss). The
 record is **kept, never deleted** - this is distinct from `dismissedFromBoard`

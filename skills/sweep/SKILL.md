@@ -257,6 +257,11 @@ surfaces nothing customer-facing and sends nothing.
 
 - Never auto-send, never auto-post, never auto-create tasks elsewhere. Drafts
   and ledger records only.
+- **Never `capture` or `promote`.** Those create a note, which requires an
+  explicit human action; the script refuses without `--confirmed` precisely so
+  an unattended pass cannot create notes by accident. A sweep-found stall goes
+  to `state.json` via `add`, and becomes a note only when the user approves a
+  promotion.
 - Verify every candidate through the shared `reconcile` adapters before
   flagging; a ping (or a bare mention/keyword search hit) is only a candidate.
 - Count quiet windows in business days; never call something stale across a

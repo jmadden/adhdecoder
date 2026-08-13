@@ -56,6 +56,16 @@ def build_instance(tmp):
     return config_path, instance / "state.json"
 
 
+def build_rw(tmp):
+    """The same instance, but with cutover confirmed so notes may be written."""
+    config = json.loads((tmp / "config.json").read_text())
+    config["ledger"] = {"backend": "obsidian", "writeMode": "readwrite",
+                        "cutover": {"singleWriterConfirmed": True}}
+    path = tmp / "config-rw.json"
+    path.write_text(json.dumps(config, indent=2))
+    return path
+
+
 def run(config_path, op_args, stdin=None):
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--config", str(config_path), "--now", NOW, *op_args],
@@ -292,6 +302,124 @@ def main():
             result.returncode == 1 and "already has an appliedMarkMet" in result.stderr,
             "a draft is refused over an already-completed close, so an audit "
             "trail cannot be quietly reopened",
+        )
+
+        # --- capture: create a task note where the user works -------------------
+        vault_tasks = tmp / "vault" / "Tasks"
+        before_count = len(list(vault_tasks.glob("*.md")))
+        state_before = state_path.read_bytes()
+        result = run(config_path, ["capture", "--confirmed", "--title",
+                                   "Draft the rollout summary", "--customer", "Acme Corp"])
+        check(
+            result.returncode == 1 and "readwrite" in result.stderr,
+            "capture is refused under readonly - ADHDecoder writes no vault file "
+            "unless cutover says it may",
+        )
+        check(
+            len(list(vault_tasks.glob("*.md"))) == before_count,
+            "...and no note was created",
+        )
+
+        rw_config = build_rw(tmp)
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
+             "capture", "--confirmed", "--title", "Draft the rollout summary",
+             "--customer", "Acme Corp", "--summary", "Pull numbers, write it up."],
+            capture_output=True, text=True)
+        check(result.returncode == 0 and "captured" in result.stdout,
+              "capture creates a note when the backend is writable")
+        created = vault_tasks / "Draft the rollout summary.md"
+        check(created.is_file(), "the note exists at the expected path")
+        check(
+            state_path.read_bytes() == state_before,
+            "capture writes NO state.json - the Query picks the note up on next read",
+        )
+
+        text = created.read_text(encoding="utf-8")
+        check("tags:\n  - task" in text, "the note carries the `task` tag, so it is enumerable")
+        check("> **Summary:** Pull numbers" in text, "the summary lands in the body")
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
+             "capture", "--confirmed", "--title", "Draft the rollout summary"],
+            capture_output=True, text=True)
+        check(
+            result.returncode == 1 and "already exists" in result.stderr,
+            "capture never overwrites an existing note",
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
+             "capture", "--title", "No confirmation given"],
+            capture_output=True, text=True)
+        check(
+            result.returncode == 1 and "--confirmed" in result.stderr,
+            "capture without --confirmed is refused, so a sweep cannot create notes",
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
+             "capture", "--confirmed", "--title", "x" * 200],
+            capture_output=True, text=True)
+        check(
+            result.returncode == 1 and "headline" in result.stderr,
+            "a paragraph-length title is refused, not truncated: it becomes the "
+            "filename and the promise id too",
+        )
+
+        # --- the YAML the note writer emits must be readable by a REAL parser ----
+        import importlib.util
+        lw_spec = importlib.util.spec_from_file_location("ledger_write", SCRIPT)
+        lw = importlib.util.module_from_spec(lw_spec)
+        lw_spec.loader.exec_module(lw)
+        try:
+            import yaml
+        except ModuleNotFoundError:
+            print("SKIP PyYAML absent, cannot cross-check emitted YAML")
+        else:
+            nasty = ["Acme Corp: explain the options", "yes", "#urgent", "2026",
+                     'He said "no"', "- leading dash", "ends with colon:"]
+            all_ok = True
+            for title in nasty:
+                fields = {"title": title, "status": "todo", "priority": "medium",
+                          "dateCreated": NOW, "dateModified": NOW,
+                          "projects": [], "customer": title, "requester": title}
+                block = lw._note_text(fields, "> **Summary:** x\n").split("---")[1]
+                try:
+                    all_ok = all_ok and yaml.safe_load(block).get("title") == title
+                except Exception:
+                    all_ok = False
+            check(
+                all_ok,
+                "every emitted note parses in PyYAML and round-trips exactly - a "
+                "title containing ': ' is valid to frontmatter.py but REJECTED by "
+                "PyYAML and Obsidian, so unquoted output would write notes the "
+                "user's own editor cannot open",
+            )
+
+        # --- promote: note first, then collapse ---------------------------------
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
+             "promote", "--confirmed", "--id", "ISSUE-789:acme-invoice-answer",
+             "--title", "Chase the invoice split answer"],
+            capture_output=True, text=True)
+        check(result.returncode == 0 and "promoted" in result.stdout, "promote succeeds")
+        check(
+            (vault_tasks / "Chase the invoice split answer.md").is_file(),
+            "the note is created",
+        )
+        state = json.loads(state_path.read_text())
+        original = next(p for p in state["promises"] if p["id"] == "ISSUE-789:acme-invoice-answer")
+        check(original["status"] == "promoted", "the original collapses to `promoted`")
+        check(
+            original["promotedTo"] == "Tasks/Chase the invoice split answer.md",
+            "...with promotedTo naming the new note, so a sweep enriches it "
+            "rather than resurrecting the collapsed record",
+        )
+        check(
+            len(original["history"]) >= 1
+            and "Promoted into" in original["history"][-1]["note"],
+            "the collapse leaves a history line",
         )
 
         # --- dry run touches nothing -----------------------------------------

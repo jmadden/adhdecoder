@@ -37,8 +37,12 @@ per conversation; this is not a backlog-grooming engine.
 2. **Approve.** The user says yes, edits it, or declines. Declined = drop it,
    do not re-offer for that item for ~a week (`itemMeta[<id>].promotionDeclinedUntil`).
 3. **Create.**
-   - Writable backend (post-cutover): call `promote()`; the adapter creates
-     the record.
+   - Writable backend (post-cutover): run
+     `scripts/ledger_write.py --config <cfg> promote --confirmed --id <id>
+     --title "<headline>"` (added 2026-08-14; `--dry-run` first to show the
+     note verbatim for approval). It creates the note, then collapses the
+     original in one step - the note is written first, so only a real note
+     earns the collapse.
    - Read-only backend: hand the user the draft as a ready-to-paste file/
      instruction instead. Creation is theirs.
 4. **Collapse the original.** Once the record exists, the `state.json` promise

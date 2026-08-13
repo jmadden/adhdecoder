@@ -83,14 +83,27 @@ confirmation to log it. If any is missing:
 
 ## Hand off to the ledger
 
-When the reality gate passes and the user confirms, invoke the `ledger` skill's
-**Add a promise** operation with `direction`, `what`, `owner`, `expectBy`,
-`source` ({ type, ref, url } for the thread/item), and, when known, `why` (what
-it unblocks - feeds stakes and nudge copy). `deadlineType` defaults to `hard`;
-set `soft`/`none` only for a genuinely ongoing item. The ledger builds the record
-per `reference/ledger-schema.md`, sets `status: pending`, stamps timestamps,
-seeds `history` with "Promise captured.", and writes `state.json` atomically. Do
-not duplicate that logic; do not touch `state.json` directly.
+When the reality gate passes and the user confirms, hand off to the `ledger`
+skill, which runs `scripts/ledger_write.py`. Never touch `state.json` or a note
+directly, and never rebuild the record by hand - the script sets `status`, stamps
+timestamps, seeds history, dedups and writes atomically.
+
+Which operation depends on where the item belongs:
+
+- **A commitment the user owns**, on a note backend -> `capture`, so it lands in
+  the note store where they actually work rather than in `state.json` where they
+  will never see it. Pass `--summary` for the context and `--source-url` for the
+  thread.
+- **Something someone else owes back** (a `they-owe-me` follow-up), or any
+  backend that is not note-backed -> `add`, with `direction`, `what`, `owner`,
+  `expectBy`, `source` ({ type, ref, url }) and, when known, `why` (what it
+  unblocks - feeds stakes and nudge copy). `deadlineType` defaults to `hard`; set
+  `soft`/`none` only for a genuinely ongoing item.
+
+`add` enforces the full reality gate, so a missing owner or date is refused -
+ask the user rather than inventing one. `capture` does not require a due date,
+because a note legitimately has none and drift covers it; do not manufacture a
+deadline just to satisfy a gate that does not apply.
 
 ## Naming a person
 

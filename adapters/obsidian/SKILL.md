@@ -156,6 +156,11 @@ in the conversation** - never from a sweep or a non-interactive `daily-run`:
   keys (`due`, `priority`, `status`, `projects`, `customer`, `requester`);
   refresh `dateModified`; append one `update <ISO> - ...` body line describing
   the change. Show the diff as a draft first; write on approval.
+- **capture(task).** Create a NEW note in `tasksDir` from an explicit user
+  request ("add a task", "remind me to..."). Same canonical frontmatter as
+  `promote` below, but no source promise and no `due` required - a note
+  legitimately has none. Implemented by `scripts/ledger_write.py capture`,
+  which requires `--confirmed` so no unattended pass can reach it.
 - **promote(promise).** Create a NEW note in `tasksDir` from an approved
   promotion draft, canonical TaskNotes frontmatter (`title`, `status: todo`,
   `priority`, `due` when known, `dateCreated`/`dateModified`, `projects`,
