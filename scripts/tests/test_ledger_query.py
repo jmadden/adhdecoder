@@ -92,7 +92,48 @@ def project_rollups(config_path, extra=()):
     return json.loads(result.stdout)["projects"]
 
 
+def check_keyword_matching():
+    """Unit-check the keyword matcher directly.
+
+    This is the one piece of text classification that decides project
+    membership, and the repo has already been burned once by keyword search
+    (reference/sweep.md). The hostile cases cannot be expressed as fixture
+    notes, so they are asserted against the function.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("ledger_query", SCRIPT)
+    lq = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lq)
+
+    def hit(keyword, text):
+        return lq.keyword_hit(lq.canonical(text), keyword)
+
+    cases = [
+        # (keyword, text, expected, why this case exists)
+        ("head", "Answer the Omicron header question", False,
+         "a keyword must not match inside a longer word"),
+        ("header", "Answer the Omicron header question", True, "the whole word matches"),
+        ("sso", "Follow up on the SSO answer", True, "matching folds case"),
+        ("sso", "Answer the SSO? question", True, "punctuation is a word boundary"),
+        ("tech writing", "Writing the tech spec", False,
+         "a multi-word keyword is a PHRASE, not a bag of tokens"),
+        ("tech writing", "Draft the tech writing update", True, "the phrase itself matches"),
+        ("integration", "Maintain the integrations inventory", False,
+         "no stemming: a plural is a real miss, made visible by the preview "
+         "rather than guessed at"),
+        (".net", "Port the .net service", True,
+         "a keyword with regex metacharacters is escaped, not compiled as a pattern"),
+        ("c++", "Review the c++ bindings", True, "same, for ++"),
+        ("q3/q4", "Plan q3/q4 coverage", True, "same, for a slash"),
+        ("", "anything at all", False, "an empty keyword matches nothing"),
+        ("doc", "", False, "an empty haystack matches nothing"),
+    ]
+    for keyword, text, expected, why in cases:
+        check(hit(keyword, text) == expected, "keyword: %s" % why)
+
+
 def main():
+    check_keyword_matching()
     with tempfile.TemporaryDirectory() as raw_tmp:
         tmp = Path(raw_tmp)
         config_path, vault = build_instance(tmp)
@@ -313,6 +354,50 @@ def main():
             > rollups["gamma"]["rollup"]["lastMovement"],
             "a fresh lastVerified does NOT count as movement (its member was "
             "verified after the last real edit, and the project is still quiet)",
+        )
+
+        # --- declared rules: what a project claims, and why --------------------
+        check(
+            rollups["sso-work"]["rollup"]["memberCount"] == 2
+            and all("keyword" in r for r in rollups["sso-work"]["rollup"]["memberReasons"].values()),
+            "a keyword rule claims members, and each says which keyword claimed it",
+        )
+        check(
+            rollups["note-probe"]["rollup"]["memberCount"] == 0
+            and rollups["what-probe"]["rollup"]["memberCount"] == 1,
+            "a keyword present only in a promise's `note` claims nothing, while the "
+            "same promise's `what` does claim - the haystack is title+what, so "
+            "membership cannot churn as a status line is rewritten",
+        )
+        check(
+            rollups["onboarding"]["rollup"]["memberCount"] == 1
+            and "Tasks/Update the Rho onboarding tracker.md"
+            not in rollups["onboarding"]["rollup"]["memberIds"]
+            and rollups["onboarding"]["rollup"]["excludedCount"] == 1,
+            "`exclude` beats a keyword match - a correction made by hand is not "
+            "overridden by a rule - and the count is reported so it has a surface",
+        )
+        check(
+            rollups["scoped-hit"]["rollup"]["memberCount"] == 1
+            and "from issues" in list(rollups["scoped-hit"]["rollup"]["memberReasons"].values())[0]
+            and rollups["scoped-miss"]["rollup"]["memberCount"] == 0,
+            "`sources` narrows rather than widens: the same keyword claims an item "
+            "from the named source and nothing from a source it did not come from",
+        )
+
+        # --- the check-in rhythm ---------------------------------------------
+        check(
+            rollups["rhythm"]["rollup"]["lag"] == "due-for-check-in"
+            and rollups["rhythm"]["rollup"]["nextCheckIn"] == "2026-08-08",
+            "a check-in comes due on its own rhythm, independent of whether any "
+            "member moved",
+        )
+        check(
+            rollups["upsilon"]["rollup"]["lag"] == "quiet"
+            and rollups["rhythm-quiet"]["rollup"]["lag"] is None,
+            "a check-in rhythm REPLACES the quiet threshold: two projects share the "
+            "same idle member, and only the one without a rhythm reports quiet - so "
+            "the card never has to state two numbers for one silence",
         )
 
         # --- --project filters on the rollup's member list -------------------

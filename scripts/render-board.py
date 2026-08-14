@@ -486,9 +486,10 @@ def projects_html(rollups, promises):
     """
     if not rollups:
         return (
-            '<p class="pane-note">No projects declared. Run '
-            '<code>ledger_query.py --projects --candidates</code> to see the '
-            "clusters already in your ledger.</p>"
+            '<p class="pane-note">No projects declared. A project is something you '
+            "say out loud - tell ADHDecoder what you are taking on and what belongs "
+            "in it, and it claims matching work from then on. A customer is not "
+            "automatically a project.</p>"
         )
     by_id = {p.get("id"): p for p in promises}
     active = [r for r in rollups if r.get("status") != "done"]
@@ -521,35 +522,67 @@ def project_card(project, by_id):
     if project.get("targetDate"):
         chips.append('<span class="chip c-proj">target %s</span>' % esc(project["targetDate"]))
 
+    if roll["checkInEvery"]:
+        chips.append(
+            '<span class="chip c-proj">check in every %s</span>'
+            % esc(plural(roll["checkInEvery"], "day"))
+        )
+
     meta = "%s, %s open" % (plural(roll["memberCount"], "item"), roll["openCount"])
     if roll["spanDays"]:
         meta += " over %s" % plural(roll["spanDays"] // 7 or 1, "week")
     meta += " | last movement %s" % (roll["lastMovement"] or "never")
     if roll["nextDate"]:
         meta += " | next %s" % roll["nextDate"]
+    if roll["nextCheckIn"]:
+        meta += " | check-in %s" % roll["nextCheckIn"]
 
     body = []
+    # the user's own sentence sits DIRECTLY above the rules that claim to
+    # implement it, so a lossy translation is visible in one glance rather than
+    # buried: "pull in tasks about tech writing" over a lone `integration` chip
+    # is a mismatch you can see
     if project.get("note"):
-        body.append("<p>%s</p>" % esc(project["note"]))
+        body.append('<div class="lbl">The idea</div><p>%s</p>' % esc(project["note"]))
     if roll["lagReason"]:
         body.append('<div class="lbl">Why it is flagged</div><p>%s</p>' % esc(roll["lagReason"]))
-    if project.get("aliases"):
-        body.append(
-            '<div class="lbl">Matches</div><div class="chips">%s</div>'
-            % "".join('<span class="chip c-proj">%s</span>' % esc(a) for a in project["aliases"])
-        )
+    rules = (
+        ['<span class="chip c-proj">%s</span>' % esc(k) for k in project.get("keywords") or []]
+        + ['<span class="chip c-cust">%s</span>' % esc(a) for a in project.get("aliases") or []]
+        + ['<span class="chip c-need">from %s</span>' % esc(x) for x in project.get("sources") or []]
+    )
+    if rules:
+        body.append('<div class="lbl">Matches</div><div class="chips">%s</div>' % "".join(rules))
     members = [by_id[m] for m in roll["memberIds"] if m in by_id]
     if members:
-        pinned = set(project.get("include") or [])
         rows = []
         for member in members:
-            mark = " <span class=\"chip c-need\">pinned</span>" if member.get("id") in pinned else ""
             state_word = "open" if member["_open"] else "done"
             rows.append(
-                "<li>%s <span class=\"pmeta\">(%s)</span>%s</li>"
-                % (esc(member.get("what") or member.get("title")), state_word, mark)
+                '<li>%s <span class="pmeta">(%s)</span>'
+                '<br><span class="pmeta">%s</span></li>'
+                % (
+                    esc(member.get("what") or member.get("title")), state_word,
+                    esc(roll["memberReasons"].get(member.get("id"), "")),
+                )
             )
         body.append('<div class="lbl">Members</div><ul>%s</ul>' % "".join(rows))
+    # an excluded item is by definition absent from the members list, so without
+    # its own block the field is write-only - the exact "a correction goes to
+    # die" failure, and a mistaken exclude would be unfindable
+    excluded = project.get("exclude") or []
+    if excluded:
+        rows = "".join(
+            "<li>%s</li>" % esc(
+                (by_id[x].get("what") or by_id[x].get("title")) if x in by_id else x
+            )
+            for x in excluded
+        )
+        body.append(
+            '<div class="lbl">Excluded (%d)</div><ul>%s</ul>'
+            '<p class="pmeta">Undo with <code>project-set --id %s --unexclude &lt;id&gt;</code></p>'
+            % (len(excluded), rows, esc(project.get("id")))
+        )
     body.append(
         '<div class="lbl">Declared</div><p class="pmeta">%s</p>'
         % esc(project.get("updated") or "unknown")

@@ -32,8 +32,8 @@ PROMISE = {
     "completedDate", "relatedRefs",
 }
 PROJECT = {
-    "id", "name", "status", "aliases", "include", "targetDate", "snoozedUntil",
-    "note", "updated",
+    "id", "name", "status", "aliases", "keywords", "sources", "include", "exclude",
+    "targetDate", "checkInEvery", "lastCheckIn", "snoozedUntil", "note", "updated",
 }
 ITEM_META = {
     "snoozedUntil", "deadlineType", "deadlineTypeReason", "verifyStatus",
@@ -226,7 +226,7 @@ def validate_project(record):
             % (list(PROJECT_STATUSES), record.get("status"))
         )
 
-    for field in ("aliases", "include"):
+    for field in ("aliases", "keywords", "sources", "include", "exclude"):
         value = record.get(field)
         if value is not None and not isinstance(value, list):
             problems.append("`%s` must be a list" % field)
@@ -235,15 +235,28 @@ def validate_project(record):
                 if not isinstance(entry, str) or not entry.strip():
                     problems.append("`%s[%d]` must be a non-empty string" % (field, index))
 
-    # a project with neither an alias nor a pinned member can never gain a
-    # member, so it can never lag and can never clear: it is furniture
-    if not (record.get("aliases") or record.get("include")):
+    # a project with no way to gain a member can never lag and never clear: it is
+    # furniture. `sources` alone counts - it narrows, but it can also stand alone
+    # ("everything from this system")
+    if not any(record.get(f) for f in ("aliases", "keywords", "sources", "include")):
         problems.append(
-            "a project needs at least one `aliases` entry or one `include` id, "
-            "or nothing can ever be a member of it"
+            "a project needs at least one `keywords`, `aliases`, `sources` or "
+            "`include` entry, or nothing can ever be a member of it"
         )
 
-    for field in ("targetDate", "snoozedUntil"):
+    # an id both pinned and excluded is a contradiction, and whichever wins is
+    # a rule the user did not choose
+    both = sorted(set(record.get("include") or []) & set(record.get("exclude") or []))
+    if both:
+        problems.append(
+            "%r is in both `include` and `exclude`; pick one" % both[0]
+        )
+
+    every = record.get("checkInEvery")
+    if every is not None and (not isinstance(every, int) or isinstance(every, bool) or every < 1):
+        problems.append("`checkInEvery` must be a positive whole number of days, got %r" % every)
+
+    for field in ("targetDate", "snoozedUntil", "lastCheckIn"):
         value = record.get(field)
         if value not in (None, "") and not _is_date(value):
             problems.append("`%s` must be YYYY-MM-DD, got %r" % (field, value))

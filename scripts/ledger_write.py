@@ -774,6 +774,18 @@ def op_mark_seen(args, config, now):
     return 0
 
 
+def _edit_list(current, added, removed, replace=False, fold=False):
+    """Add/remove entries on one of a project's rule lists, order preserved."""
+    out = [] if replace else list(current or [])
+    key = (lambda v: lq.canonical(v)) if fold else (lambda v: v)
+    for entry in added or []:
+        if key(entry) not in {key(e) for e in out}:
+            out.append(entry)
+    for entry in removed or []:
+        out = [e for e in out if key(e) != key(entry)]
+    return out
+
+
 def op_project_set(args, config, now):
     """Declare or amend a project. state.json only - no note is ever written.
 
@@ -800,7 +812,7 @@ def op_project_set(args, config, now):
             raise Refused("a new project needs --name")
         target = {
             "id": args.id, "name": args.name, "status": "active",
-            "aliases": [], "include": [],
+            "keywords": [], "aliases": [], "sources": [], "include": [], "exclude": [],
         }
 
     updated = dict(target)
@@ -811,21 +823,40 @@ def op_project_set(args, config, now):
     if args.note is not None:
         updated["note"] = args.note or None
 
-    aliases = [] if args.replace_aliases else list(updated.get("aliases") or [])
-    for alias in args.alias or []:
-        if lq.canonical(alias) not in {lq.canonical(a) for a in aliases}:
-            aliases.append(alias)
-    for alias in args.unalias or []:
-        aliases = [a for a in aliases if lq.canonical(a) != lq.canonical(alias)]
+    aliases = _edit_list(
+        updated.get("aliases"), args.alias, args.unalias,
+        replace=args.replace_aliases, fold=True,
+    )
     updated["aliases"] = aliases
-
-    include = list(updated.get("include") or [])
-    for pid in args.include or []:
-        if pid not in include:
-            include.append(pid)
-    for pid in args.uninclude or []:
-        include = [i for i in include if i != pid]
+    keywords = _edit_list(
+        updated.get("keywords"), args.keyword, args.unkeyword,
+        replace=args.replace_keywords, fold=True,
+    )
+    for keyword in keywords:
+        if not lq.canonical(keyword):
+            raise Refused("a blank keyword would match nothing; drop it")
+    updated["keywords"] = keywords
+    updated["sources"] = _edit_list(
+        updated.get("sources"), args.source, args.unsource, fold=True
+    )
+    include = _edit_list(updated.get("include"), args.include, args.uninclude)
     updated["include"] = include
+    updated["exclude"] = _edit_list(updated.get("exclude"), args.exclude, args.unexclude)
+
+    if args.check_in_every is not None:
+        updated["checkInEvery"] = args.check_in_every or None
+        if not args.check_in_every:
+            updated["lastCheckIn"] = None
+    if args.checked_in:
+        if not updated.get("checkInEvery"):
+            raise Refused(
+                "%r has no check-in rhythm to reset. Set one with "
+                "--check-in-every <days> first." % args.id
+            )
+        stamp = args.checked_in if args.checked_in != "today" else now.date().isoformat()
+        if not lq.as_date(stamp):
+            raise Refused("--checked-in expects YYYY-MM-DD (or no value for today)")
+        updated["lastCheckIn"] = stamp
 
     if args.target_date is not None:
         updated["targetDate"] = args.target_date or None
@@ -871,7 +902,34 @@ def op_project_set(args, config, now):
                 % (len(missing), ", ".join(sorted(missing)[:5]))
             )
 
+    # THE PREVIEW. A project's rules are a lossy translation of a sentence the
+    # user said, and the words they say are often not the words in their ledger
+    # ("tech writing" appears nowhere; "doc" and "playbook" do). Without showing
+    # what the rules actually claim, a project can be declared, look correct, and
+    # sit empty forever. So membership is always computed and shown BEFORE the
+    # write, with the reason each member matched.
+    union = existing_union(config, now)
+    member_ids, reasons = lq.project_members(updated, union)
+    by_id = {p.get("id"): p for p in union}
+    print("%s would claim %d item(s):" % (args.id, len(member_ids)))
+    for member_id in member_ids[:25]:
+        promise = by_id.get(member_id) or {}
+        print("  %s\n      %s" % (
+            (promise.get("what") or promise.get("title") or member_id)[:88],
+            reasons.get(member_id, "?"),
+        ))
+    if len(member_ids) > 25:
+        print("  ... and %d more" % (len(member_ids) - 25))
+    if not member_ids:
+        print(
+            "  NOTHING MATCHES. This project would be declared and stay empty.\n"
+            "  The words in a ledger are rarely the words we say out loud - check\n"
+            "  what the items are actually called and adjust --keyword, or pin ids\n"
+            "  with --include."
+        )
+
     if args.dry_run:
+        print()
         print(json.dumps(updated, indent=2, sort_keys=True))
         print("dry run: nothing written")
         return 0
@@ -974,6 +1032,27 @@ def main(argv=None):
     )
     p_project.add_argument("--include", action="append", help="pin a promise id")
     p_project.add_argument("--uninclude", action="append")
+    p_project.add_argument(
+        "--keyword", action="append",
+        help="a word or phrase; matched on a title/what word boundary",
+    )
+    p_project.add_argument("--unkeyword", action="append")
+    p_project.add_argument("--replace-keywords", action="store_true")
+    p_project.add_argument(
+        "--source", action="append",
+        help="narrow to items from here; matched against source.type or source.url",
+    )
+    p_project.add_argument("--unsource", action="append")
+    p_project.add_argument("--exclude", action="append", help="kick a promise id out")
+    p_project.add_argument("--unexclude", action="append")
+    p_project.add_argument(
+        "--check-in-every", type=int, default=None, metavar="DAYS",
+        help="check-in rhythm in calendar days; 0 clears it",
+    )
+    p_project.add_argument(
+        "--checked-in", nargs="?", const="today", default=None, metavar="YYYY-MM-DD",
+        help="reset the check-in clock (defaults to today)",
+    )
     p_project.add_argument("--target-date", default=None, help="YYYY-MM-DD, or '' to clear")
     p_project.add_argument("--snooze", default=None, help="quiet until YYYY-MM-DD")
     p_project.add_argument("--unsnooze", action="store_true")

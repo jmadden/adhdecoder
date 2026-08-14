@@ -553,23 +553,122 @@ def read_state(config):
 PROJECT_QUIET_DAYS = 10
 
 
-def project_members(project, promises):
-    """Ids of every promise belonging to this project, in Query order.
+# Keywords match TITLE + WHAT, and nothing else.
+#
+#   NOT `note`: it is the latest-state summary, overwritten as reality changes
+#   (reference/ledger-schema.md). Matching it would make membership vary with
+#   prose churn - an item joins when someone writes "integration" into a status
+#   line and leaves when it is rewritten, taking its movement stamps with it and
+#   flipping `quiet` on and off with no user action. Membership must be stable.
+#   Measured too: `note` is present on ~5% of real records and is the longest
+#   prose in them, so it would add almost no recall for most of the risk.
+#
+#   NOT `context`: that is exactly what `aliases` matches, canonically. Matching
+#   it again with looser semantics would let the keyword "integration" claim
+#   every promise belonging to a customer called Integration Partners.
+KEYWORD_FIELDS = ("title", "what")
 
-    Two ways in, checked in this order:
-      1. `include` - an explicitly pinned id, regardless of its context. This is
-         the ONLY way to split one customer into two workstreams, because both
-         workstreams carry the same `customer` and therefore the same context.
-      2. an alias matching the promise's canonical context.
+
+def keyword_hit(haystack, keyword):
+    """Word-boundary PHRASE match of one keyword against one folded field.
+
+    A phrase, not a bag of tokens: "tech writing" must not match "writing the
+    tech spec". No stemming either - "integration" does not match
+    "integrations". That is a real miss, and the answer is the declare-time
+    preview showing it rather than a guess that cannot be predicted from the
+    card. Under-matching is visible; over-matching invents a project's story.
+
+    `re.escape` is load-bearing: ".net", "c++" and "q3/q4" are legal keywords
+    that otherwise raise or compile to something else. `\\b` is wrong for the
+    same reason - it would demand a word boundary before a leading dot.
     """
+    needle = canonical(keyword)
+    if not needle:
+        return False
+    pattern = r"(?<![0-9a-z])%s(?![0-9a-z])" % re.escape(needle)
+    return re.search(pattern, haystack) is not None
+
+
+def keyword_reason(promise, keywords):
+    """The first keyword that claims this promise, and which field it hit."""
+    for field in KEYWORD_FIELDS:
+        haystack = canonical(promise.get(field))
+        if not haystack:
+            continue
+        for keyword in keywords:
+            if keyword_hit(haystack, keyword):
+                return 'keyword "%s" in %s' % (keyword, field)
+    return None
+
+
+def source_reason(promise, sources):
+    """Whether the promise came from one of these systems, and which.
+
+    Matched as a substring against `source.type` AND `source.url`, because the
+    type alone is not enough to say where something came from: on a note-backed
+    ledger nearly every record is `note-extracted`, which records how the link
+    was found rather than what system it points at. The URL does say - a wiki
+    path separates a wiki page from a ticket on the same host.
+    """
+    source = promise.get("source") or {}
+    hay = "%s %s" % (canonical(source.get("type")), canonical(source.get("url")))
+    for entry in sources:
+        needle = canonical(entry)
+        if needle and needle in hay:
+            return "from %s" % entry
+    return None
+
+
+def project_members(project, promises):
+    """(member ids in Query order, {id: why it is a member}).
+
+    Mechanical and ordered, and stated in one sentence on the card: anything
+    pinned in, plus anything whose title or what matches a keyword, plus
+    anything for one of these contexts - narrowed to these sources if any are
+    named, minus anything excluded.
+
+      1. `exclude` wins over everything. A correction the user made by hand is
+         not overridden by a rule.
+      2. `include` - a pinned id, whatever its context. This is the only way to
+         split one customer into two workstreams, since both carry the same
+         `customer` and therefore the same context.
+      3. a keyword hit, or an alias matching the canonical context.
+      4. if `sources` is named, the promise must also come from one of them.
+
+    Every member carries the reason it is one, because a project that cannot say
+    why something is in it is a project that assumes.
+    """
+    excluded = set(project.get("exclude") or [])
     pinned = set(project.get("include") or [])
     aliases = {canonical(a) for a in (project.get("aliases") or []) if canonical(a)}
-    members = []
+    keywords = [k for k in (project.get("keywords") or []) if canonical(k)]
+    sources = [s for s in (project.get("sources") or []) if canonical(s)]
+
+    members, reasons = [], {}
     for promise in promises:
         pid = promise.get("id")
-        if pid in pinned or canonical(promise.get("context")) in aliases:
-            members.append(pid)
-    return members
+        if pid in excluded:
+            continue
+        if pid in pinned:
+            reason = "pinned"
+        else:
+            reason = keyword_reason(promise, keywords)
+            if not reason and canonical(promise.get("context")) in aliases:
+                reason = "context: %s" % strip_wikilink(promise.get("context"))
+            if not reason and sources and not (keywords or aliases):
+                # `sources` can stand alone ("everything from this system")
+                reason = source_reason(promise, sources)
+            if not reason:
+                continue
+            if sources:
+                narrowed = source_reason(promise, sources)
+                if not narrowed:
+                    continue
+                if not reason.startswith("from "):
+                    reason = "%s, %s" % (reason, narrowed)
+        members.append(pid)
+        reasons[pid] = reason
+    return members, reasons
 
 
 def last_movement(members):
@@ -617,7 +716,7 @@ def projects(promises, state, now):
     for declared in state.get("projects") or []:
         if not isinstance(declared, dict):
             continue
-        member_ids = project_members(declared, promises)
+        member_ids, member_reasons = project_members(declared, promises)
         members = [by_id[mid] for mid in member_ids if mid in by_id]
         pinned = set(declared.get("include") or [])
 
@@ -634,13 +733,25 @@ def projects(promises, state, now):
         target = as_date(declared.get("targetDate"))
         active = declared.get("status", "active") == "active"
 
+        # a check-in rhythm the user asked for REPLACES the inferred quiet
+        # threshold rather than stacking with it. Otherwise a 14-day rhythm and a
+        # 10-business-day quiet check flag the same silence twice, days apart, and
+        # the card has to state two numbers - the exact harm the one-stated-number
+        # rule exists to prevent. Calendar days, because "every 14 days" means two
+        # weeks; business days would silently make it nearer three.
+        every = declared.get("checkInEvery")
+        last_check = as_date(declared.get("lastCheckIn")) or as_date(declared.get("updated"))
+        next_check = last_check + timedelta(days=every) if (every and last_check) else None
+        due_for_check_in = bool(active and not snoozed and next_check and next_check <= today)
+
         # Quiet does NOT require open work. A project whose members are all closed
         # but which was never marked done has nothing left to surface it - that is
         # precisely the effort that falls out of view, so it must still be able to
         # go quiet. A project that just closed its last item moved today, so it
         # stays silent on its own without a grace-period special case.
         quiet = bool(
-            active and not snoozed and members and movement_days >= PROJECT_QUIET_DAYS
+            active and not snoozed and members and not every
+            and movement_days >= PROJECT_QUIET_DAYS
         )
         slipping = bool(
             active
@@ -653,6 +764,11 @@ def projects(promises, state, now):
         if quiet:
             lag = "quiet"
             reason = "nothing has moved in %s" % plural_days(movement_days)
+        elif due_for_check_in:
+            lag = "due-for-check-in"
+            reason = "check-in due %s (every %s)" % (
+                next_check.isoformat(), plural_days(every, calendar=True)
+            )
         elif slipping:
             lag = "date-slipping"
             reason = (
@@ -665,7 +781,9 @@ def projects(promises, state, now):
         record = dict(declared)
         record["rollup"] = {
             "memberIds": member_ids,
+            "memberReasons": member_reasons,
             "memberCount": len(members),
+            "excludedCount": len(declared.get("exclude") or []),
             "openCount": len(open_members),
             "closedCount": len([p for p in members if not p["_open"]]),
             "pinnedCount": len([m for m in member_ids if m in pinned]),
@@ -674,6 +792,8 @@ def projects(promises, state, now):
             "firstSeen": min(starts).isoformat() if starts else None,
             "spanDays": (today - min(starts)).days if starts else 0,
             "nextDate": next_dates[0].isoformat() if next_dates else None,
+            "nextCheckIn": next_check.isoformat() if next_check else None,
+            "checkInEvery": every or None,
             "lag": lag,
             "lagReason": reason,
             "snoozed": snoozed,
@@ -978,27 +1098,38 @@ def absorb(target, other):
         target[field] = keep(values) if values else None
 
 
-def candidate_clusters(promises, declared):
-    """Context clusters nobody has declared yet, as project suggestions.
+def candidate_clusters(promises, rollups):
+    """Context clusters, for finding ids to pin. **NOT a list of projects.**
 
-    Read-only and advisory. It exists because the alternative to a bootstrap is
-    hand-writing JSON, and a feature that costs a hand-written record does not
-    get used. It suggests; the write path decides.
+    A customer is not a project - a user is often pulled into an engagement ad
+    hoc, and that is not an effort they own. This exists for one narrow job:
+    when the user asks "what could I group", it shows what is in the ledger and,
+    critically, the several spellings one customer has accumulated. Declaring a
+    project is a conversation (`skills/projects`), never a pick from this list.
+
+    Read-only and advisory: it prints, and the write path decides.
     """
-    claimed = set()
-    for project in declared:
+    claimed_contexts = set()
+    claimed_ids = set()
+    for project in rollups:
         for alias in project.get("aliases") or []:
             if canonical(alias):
-                claimed.add(canonical(alias))
+                claimed_contexts.add(canonical(alias))
+        # a promise already claimed by ANY rule (keyword, source, pin) is not
+        # undeclared. Checking aliases alone would keep offering a cluster whose
+        # every item a keyword-only project already covers.
+        claimed_ids.update(project.get("rollup", {}).get("memberIds") or [])
 
     clusters = {}
     homeless = []
     for promise in promises:
+        if promise.get("id") in claimed_ids:
+            continue
         key = canonical(promise.get("context"))
         if not key:
             homeless.append(promise)
             continue
-        if key in claimed:
+        if key in claimed_contexts:
             continue
         clusters.setdefault(key, []).append(promise)
 
@@ -1037,7 +1168,7 @@ def print_projects(promises, meta, now, args):
     declared = meta["projects"]
     candidates, homeless = ([], [])
     if args.candidates:
-        candidates, homeless = candidate_clusters(promises, meta["state"].get("projects") or [])
+        candidates, homeless = candidate_clusters(promises, declared)
 
     if args.json:
         json.dump(
@@ -1079,7 +1210,12 @@ def print_projects(promises, meta, now, args):
         )
 
     if args.candidates:
-        print("\n%d undeclared cluster(s):" % len(candidates))
+        print(
+            "\n%d context cluster(s) not claimed by any project.\n"
+            "These are CONTEXTS, not projects - a customer is not automatically an\n"
+            "effort worth tracking. Use them to find ids to pin or spellings to\n"
+            "alias; declare a project by talking it through instead." % len(candidates)
+        )
         for cluster in candidates:
             print(
                 "  %s - %d items, %d open | %s -> %s"
@@ -1096,18 +1232,10 @@ def print_projects(promises, meta, now, args):
             for stem, ids in cluster["slugClusters"].items():
                 print("      %d items share the slug %s-* (a possible split)"
                       % (len(ids), stem))
-            print(
-                "      declare: ledger_write.py --config CFG project-set --id %s \\\n"
-                "                 --name %r%s"
-                % (
-                    cluster["suggestedId"], cluster["name"],
-                    "".join(" \\\n                 --alias %r" % s for s in cluster["spellings"]),
-                )
-            )
         if homeless:
             print(
-                "\n  %d item(s) have no context and cannot be clustered - pin them "
-                "with --include if they belong to a project." % len(homeless)
+                "\n  %d item(s) have no context at all - a keyword rule or an "
+                "--include pin is the only way to reach them." % len(homeless)
             )
     return 0
 

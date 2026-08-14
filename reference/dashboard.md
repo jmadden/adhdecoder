@@ -80,7 +80,7 @@ from the ledger + config.
 | **Waiting on Others** (`#pane-waiting .waitlist`) | `.waitrow` | Open `they-owe-me` promises. |
 | **Shipped** (`#pane-shipped .wins`) | `.win` | `met` / `cleared` recently. |
 | **Tomorrow's Headlines** (`#pane-tomorrow .today`) | `.big` | Due-soon / scheduled-ahead upcoming items (not yet actionable today). |
-| **Projects** (`#pane-projects .projlist`) | `.proj` | Declared projects (`state.json` `projects`), lagging first, then a **Closed** section for `status: done`. Each card carries the rollup, the aliases it matches, and its members. |
+| **Projects** (`#pane-projects .projlist`) | `.proj` | Declared projects (`state.json` `projects`), lagging first, then a **Closed** section for `status: done`. Each card carries the user's own sentence, then the rules that implement it (so a lossy translation is visible), then every member **with the reason it matched**, then an **Excluded** block with its undo command. |
 | **History** (`#pane-history .histlist`) | `.hist` | All `met` / `cleared`, newest first. |
 
 **Board / Today state color** (the template's `.big` variants). The four states

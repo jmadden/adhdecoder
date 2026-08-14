@@ -210,6 +210,27 @@ def main():
             "Nothing tagged yet" in html,
             "a project with no members still renders (its emptiness is the point)",
         )
+        check(
+            'keyword &quot;SSO&quot; in title' in html or 'keyword "SSO" in title' in html,
+            "every member states on the card WHY it is in the project - a project "
+            "that cannot say why is a project that assumes",
+        )
+        check(
+            "Excluded (1)" in html and "--unexclude" in html,
+            "an excluded item gets its own block plus the undo command: it is "
+            "absent from the member list by definition, so without this the field "
+            "is write-only and a mistaken exclude is unfindable",
+        )
+        check(
+            "check in every 14 days" in html and "check-in 2026-08-08" in html,
+            "the check-in rhythm and its next date render",
+        )
+        check(
+            "THE IDEA" in html.upper()
+            and html.find("THE IDEA") < html.upper().find("MATCHES"),
+            "the user's own sentence renders directly ABOVE the rules that claim "
+            "to implement it, so a lossy translation is visible at a glance",
+        )
 
         # A board with NOTHING lagging must render the block as empty and must
         # not crash. The injection point is unconditional and the renderer

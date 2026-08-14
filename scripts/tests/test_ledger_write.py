@@ -537,6 +537,57 @@ def main():
             "--dry-run prints the record and writes nothing",
         )
 
+        # --- declared rules and the preview ---------------------------------
+        result = run(config_path, [
+            "project-set", "--id", "kwtest", "--name", "KW", "--keyword", "invoice",
+        ])
+        check(
+            result.returncode == 0 and "would claim 1 item" in result.stdout
+            and "keyword \"invoice\"" in result.stdout,
+            "declaring a project previews what it claims, with the reason, BEFORE "
+            "the write - the words a user says are rarely the words in their "
+            "ledger, and a silently-empty project looks like a working one",
+        )
+        result = run(config_path, [
+            "project-set", "--id", "nomatch", "--name", "No", "--keyword", "zzzznothing",
+        ])
+        check(
+            result.returncode == 0 and "NOTHING MATCHES" in result.stdout,
+            "a rule set that claims nothing says so loudly",
+        )
+        result = run(config_path, [
+            "project-set", "--id", "conflict", "--name", "C", "--keyword", "x",
+            "--include", GOOD["id"], "--exclude", GOOD["id"],
+        ])
+        check(
+            result.returncode == 1 and "both `include` and `exclude`" in result.stderr,
+            "an id both pinned and excluded is refused rather than one silently winning",
+        )
+        result = run(config_path, ["project-set", "--id", "kwtest", "--checked-in"])
+        check(
+            result.returncode == 1 and "no check-in rhythm" in result.stderr,
+            "resetting a check-in clock that does not exist is refused, not a no-op",
+        )
+        result = run(config_path, [
+            "project-set", "--id", "kwtest", "--check-in-every", "14", "--checked-in", "2026-08-01",
+        ])
+        state = json.loads(state_path.read_text())
+        kw = [p for p in state["projects"] if p["id"] == "kwtest"][0]
+        check(
+            result.returncode == 0 and kw["checkInEvery"] == 14
+            and kw["lastCheckIn"] == "2026-08-01",
+            "a check-in rhythm and its last reset are both recorded",
+        )
+        result = run(config_path, ["project-set", "--id", "kwtest", "--check-in-every", "0"])
+        state = json.loads(state_path.read_text())
+        kw = [p for p in state["projects"] if p["id"] == "kwtest"][0]
+        check(
+            result.returncode == 0 and kw["checkInEvery"] is None
+            and kw["lastCheckIn"] is None,
+            "clearing the rhythm clears the stale clock with it, so no orphan date "
+            "is left behind to be rendered later",
+        )
+
         result = run(config_path, [
             "project-set", "--id", "acme", "--status", "done", "--target-date", "2026-09-01",
         ])

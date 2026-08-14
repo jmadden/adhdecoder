@@ -68,12 +68,20 @@ plus the minimum needed to track and dedup. Everything else it references via
   that has quietly returned nothing for days is visible rather than assumed
   healthy. Cap it (keep the last ~10 runs); it is a log, not a store. Surfaced
   by `doctor`.
-- **projects** — array of project records: a declared grouping of promises that
-  already exist, so a multi-week effort has something that notices when it goes
-  quiet. `{ id, name, status, aliases, include, targetDate, snoozedUntil, note,
-  updated }`. A project never owns or changes a promise, and its `targetDate`
-  never becomes a second definition of `overdue`. Membership, both lag signals
-  and their thresholds live in `reference/projects.md`, stated once.
+- **projects** — array of project records: a multi-week effort the user
+  **declared**, which then claims matching work as it arrives.
+  `{ id, name, status, note, keywords, aliases, sources, include, exclude,
+  targetDate, checkInEvery, lastCheckIn, snoozedUntil, updated }`. A project
+  never owns or changes a promise, and its `targetDate` never becomes a second
+  definition of `overdue`. **A customer is never inferred to be a project.**
+  Membership, the three lag signals and their thresholds live in
+  `reference/projects.md`, stated once.
+
+  The rule fields (`keywords`/`sources`/`exclude`/`checkInEvery`/`lastCheckIn`)
+  were added inside schemaVersion 3 rather than bumping to 4: no file in
+  existence had a `projects` array, so nothing was ever written against the
+  narrower vocabulary, and `validate_project()` refuses unknown fields so an
+  older plugin reports rather than misreads.
 - **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, deadlineTypeReason,
   verifyStatus, verifyReason, lastVerified, source, noteOnly, dismissedFromBoard,
   frontmatterWarning, markMetDraft, updateDraft, appliedMarkMet } }`. Overlay
