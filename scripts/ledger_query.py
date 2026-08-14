@@ -96,6 +96,40 @@ def first_scalar(value):
     return text or None
 
 
+WIKILINK_RE = re.compile(r"^\[\[([^\]]+)\]\]$")
+
+
+def strip_wikilink(value):
+    """`[[Acme]]` -> `Acme`, `[[Acme|Acme Corp]]` -> `Acme Corp`. Else unchanged.
+
+    A note's `projects` field holds Obsidian wikilinks, and `context` falls back
+    to it when `customer` is empty. Without this the context is the literal
+    string `[[Acme]]`, which silently fails every exact match downstream: the
+    `--context` filter, the board chip, reconcile's roster lookup. A non-link
+    string passes through untouched, so this is safe to apply anywhere a display
+    value is derived.
+    """
+    if value is None:
+        return None
+    match = WIKILINK_RE.match(str(value).strip())
+    if not match:
+        return value
+    inner = match.group(1)
+    # `[[target|display]]` - the display half is what a human reads
+    return inner.split("|")[-1].strip() or value
+
+
+def canonical(value):
+    """Fold a context/alias to its match key. MATCHING ONLY, never displayed.
+
+    Case and incidental whitespace are not meaningful differences between two
+    spellings of the same customer, and neither is the wikilink wrapper.
+    """
+    if value is None:
+        return ""
+    return " ".join(str(strip_wikilink(value)).split()).casefold()
+
+
 def business_days_between(start, end):
     if start is None or end is None or end <= start:
         return 0
@@ -258,8 +292,11 @@ def read_notes(config):
         scheduled = as_date(frontmatter.get("scheduled"))
         priority = str(frontmatter.get("priority") or "").strip().lower()
         title = first_scalar(frontmatter.get("title")) or note_path.stem
-        context = first_scalar(frontmatter.get("customer")) or first_scalar(
-            frontmatter.get("projects")
+        # `projects` holds wikilinks; strip them here so the context that reaches
+        # every surface and every filter is the plain name
+        context = strip_wikilink(
+            first_scalar(frontmatter.get("customer"))
+            or first_scalar(frontmatter.get("projects"))
         )
         owner = first_scalar(frontmatter.get("requester")) or first_scalar(
             frontmatter.get("customer")
@@ -686,8 +723,8 @@ def main(argv=None):
     promises, meta = query(config, now)
     chosen = select(promises, args.select)
     if args.context:
-        wanted = args.context.strip().lower()
-        chosen = [p for p in chosen if str(p.get("context") or "").strip().lower() == wanted]
+        wanted = canonical(args.context)
+        chosen = [p for p in chosen if canonical(p.get("context")) == wanted]
     if args.direction:
         chosen = [p for p in chosen if p.get("direction") == args.direction]
 

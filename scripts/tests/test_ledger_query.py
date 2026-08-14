@@ -164,6 +164,32 @@ def main():
             scoped["count"] == 1 and "Beta Co" in str(whats(scoped)),
             "--context filters case-insensitively",
         )
+
+        # --- context derived from `projects` (wikilinks) --------------------
+        # The Rho note has an EMPTY customer, so its context falls back to
+        # `projects: ["[[Rho Mutual]]"]`. Until this fixture existed that branch
+        # had no coverage, and it returned the literal "[[Rho Mutual]]" - which
+        # silently fails every exact match downstream: this filter, the board
+        # chip, reconcile's roster lookup.
+        rho = [
+            p for p in q(config_path, "open")["promises"]
+            if "Rho onboarding" in str(p.get("what") or p.get("title"))
+        ]
+        check(
+            len(rho) == 1 and rho[0]["context"] == "Rho Mutual",
+            "a context derived from a `projects` wikilink is stripped to the "
+            "plain name, never left as [[...]]",
+        )
+        by_link = q(config_path, "open", ["--context", "Rho Mutual"])
+        check(
+            "Update the Rho onboarding tracker" in str(whats(by_link)),
+            "and that stripped context is findable by --context",
+        )
+        check(
+            q(config_path, "open", ["--context", "  rho   mutual "])["count"]
+            == by_link["count"],
+            "--context folds case and incidental whitespace (canonical())",
+        )
         directed = q(config_path, "open", ["--direction", "they-owe-me"])
         check(
             all(p["direction"] == "they-owe-me" for p in directed["promises"]),

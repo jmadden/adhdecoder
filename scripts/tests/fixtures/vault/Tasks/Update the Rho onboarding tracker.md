@@ -6,7 +6,7 @@ due: 2026-08-06
 dateCreated: 2026-08-01T09:00:00-07:00
 dateModified: 2026-08-05T11:22:33.417-07:00
 projects: ["[[Rho Mutual]]"]
-customer: Rho Mutual
+customer:
 requester:
   - N. Lead
 tags:
