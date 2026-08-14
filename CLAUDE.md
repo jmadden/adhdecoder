@@ -167,6 +167,9 @@ The full loop plus a cross-cutting verification layer. Each is a skill under
 - **reconcile** (cross-cutting): cross-check a promise against its live source
   before any skill chases/publishes. One verification path — chase-in /
   radiate-out / drift / panic / sweep all call it.
+- **projects**: declare a multi-week effort in conversation; it then claims
+  matching work as it arrives. Declared, never inferred - a customer is not a
+  project. Always previews what its rules would claim before writing.
 - **ledger-obsidian**: the optional Obsidian backend (in `adapters/obsidian/`,
   not `skills/`). Read-only by default; write-back gated behind cutover.
 

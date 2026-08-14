@@ -41,6 +41,7 @@ Each capability is a skill; together they close the follow-up loop:
 | 📣 | **chase-in**      | surfaces slips as tiered, ready-to-send nudges             |
 | 🛰️ | **radiate-out**   | publishes status so people stop chasing *you*              |
 | 🌫️ | **drift**         | flags what has quietly gone stale                          |
+| 🧭 | **projects**      | declare a multi-week effort; it claims matching work        |
 | 🚨 | **panic**         | mid-spiral, hands you the single next move                 |
 | 🧹 | **sweep**         | pulls promises in from your configured sources             |
 | 🔎 | **reconcile**     | cross-checks against the live source before acting         |

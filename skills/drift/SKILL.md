@@ -202,6 +202,8 @@ Same tone rule, and it matters more here: a project has been quiet for weeks by
 definition, so "this hasn't moved since <date>" is the whole message. Never
 imply the user dropped it. A project is often quiet for a good reason the ledger
 cannot see, so offer the snooze (`project-set --snooze`) as readily as the chase.
+A project carrying a check-in rhythm reports `due-for-check-in` instead of
+`quiet`; treat it the same way and route the reset through the `projects` skill.
 
 If a project has zero open items and is not marked done, say so plainly - that
 is a project with nothing scheduled, not a finished one, and it is the case the
