@@ -1,6 +1,5 @@
 {
   "_comment": "Copy this to your instance folder as config.json and fill it in. This file (the example) stays in the repo with NO real data. Your filled config.json lives in your private instance layer, never in the repo.",
-
   "identity": {
     "name": "<your name>",
     "email": "<your email>",
@@ -9,7 +8,6 @@
       "crm": "<your crm user id, if any>"
     }
   },
-
   "storage": {
     "adapter": "filesystem",
     "instancePath": "<absolute path to your instance folder, e.g. ~/Vault/Work/_decoder>",
@@ -22,38 +20,80 @@
       "dashboardFile": "Decoder Dashboard.html"
     }
   },
-
   "_ledger_comment": "backend selects the promise store. 'builtin' (default) = state.json, always writable. 'obsidian' = the optional Obsidian adapter (adapters/obsidian); it also accepts any deprecated legacy backend value as an alias. writeMode: 'readonly' (default) = an adapter never writes its underlying records (actions become drafts); 'readwrite' = the adapter writes them on explicit user actions, ONLY valid after cutover with singleWriterConfirmed true (see reference/cutover.md). Leave writeMode readonly until you deliberately cut over.",
   "ledger": {
     "backend": "builtin",
     "writeMode": "readonly",
-    "cutover": { "singleWriterConfirmed": false, "date": null }
+    "cutover": {
+      "singleWriterConfirmed": false,
+      "date": null
+    }
   },
-
   "watchlist": {
     "customers": [],
-    "projects": [],
     "people": []
   },
-
   "contacts": {},
-
   "_sources_comment": "weight (high|medium|low, default medium) sets sweep order/depth and is a tiebreak in surfacing; cadence (every-run|daily|hourly, default every-run) sets how often. See reference/scheduling.md. Tune per source, e.g. chat high/every-run, issues low/daily. Optional per-source keys (see reference/parity-port.md): tz (the source's own timezone for correct since-cutoff filtering, e.g. issues/crm) and noise (a known recurring bulk-sync/no-activity pattern to ignore, e.g. a nightly bump time).",
   "sources": [
-    { "type": "issues",   "enabled": false, "category": "~~issue tracker", "weight": "medium", "cadence": "every-run" },
-    { "type": "chat",     "enabled": false, "category": "~~chat",          "weight": "medium", "cadence": "every-run" },
-    { "type": "email",    "enabled": false, "category": "~~email",         "weight": "medium", "cadence": "every-run" },
-    { "type": "calendar", "enabled": false, "category": "~~calendar",      "weight": "medium", "cadence": "every-run" },
-    { "type": "crm",      "enabled": false, "category": "~~crm",           "weight": "medium", "cadence": "every-run" },
-    { "type": "docs",     "enabled": false, "category": "~~docs",          "weight": "medium", "cadence": "every-run" },
-    { "type": "calls",    "enabled": false, "category": "~~calls",         "weight": "medium", "cadence": "every-run" }
+    {
+      "type": "issues",
+      "enabled": false,
+      "category": "~~issue tracker",
+      "weight": "medium",
+      "cadence": "every-run"
+    },
+    {
+      "type": "chat",
+      "enabled": false,
+      "category": "~~chat",
+      "weight": "medium",
+      "cadence": "every-run"
+    },
+    {
+      "type": "email",
+      "enabled": false,
+      "category": "~~email",
+      "weight": "medium",
+      "cadence": "every-run"
+    },
+    {
+      "type": "calendar",
+      "enabled": false,
+      "category": "~~calendar",
+      "weight": "medium",
+      "cadence": "every-run"
+    },
+    {
+      "type": "crm",
+      "enabled": false,
+      "category": "~~crm",
+      "weight": "medium",
+      "cadence": "every-run"
+    },
+    {
+      "type": "docs",
+      "enabled": false,
+      "category": "~~docs",
+      "weight": "medium",
+      "cadence": "every-run"
+    },
+    {
+      "type": "calls",
+      "enabled": false,
+      "category": "~~calls",
+      "weight": "medium",
+      "cadence": "every-run"
+    }
   ],
-
   "schedule": {
-    "pivots": ["08:30", "12:30", "16:00"],
+    "pivots": [
+      "08:30",
+      "12:30",
+      "16:00"
+    ],
     "timezone": "America/Los_Angeles",
     "boardPath": "<path to the HTML dashboard written each run, e.g. ~/Vault/Work/Decoder Board.html; unset = print to chat only>"
   },
-
   "lastSwept": null
 }

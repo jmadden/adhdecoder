@@ -2,7 +2,7 @@
 name: board
 description: >
   Render the ADHDecoder dashboard: a multi-tab HTML board (Board / Shipped /
-  Waiting on Others / Tomorrow's Headlines / History) built from the current
+  Waiting on Others / Tomorrow's Headlines / Projects / History) built from the current
   ledger and written to config.schedule.boardPath. Use when the user says "show
   my board", "refresh the dashboard", "open the board", "render the dashboard",
   or "regenerate my board". It only renders a read-only view from the ledger; it
@@ -43,7 +43,7 @@ this skill's job, before the call.
 ## What this does / does not do
 
 - **Renders a view**, by calling `scripts/render-board.py`. The script groups
-  promises into the five tabs, fills the template placeholders, emits each card
+  promises into the six tabs, fills the template placeholders, emits each card
   with its `verifyStatus` chip + real source link + record link, and writes the
   HTML board. Full procedure and tab mapping live in `reference/dashboard.md`.
 - **Freshness-aware** (verification-discipline Rule 3). Check `lastSwept` first.

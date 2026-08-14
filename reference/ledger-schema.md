@@ -25,11 +25,12 @@ plus the minimum needed to track and dedup. Everything else it references via
 }
 ```
 
-- **schemaVersion** — integer, for future migrations. **2** is the version in
-  which every field below is named and the duplicates are deprecated (see
-  Migration). Documentary: nothing branches on it yet, and no automated run may
-  bump it. `validate-state.py` reports the declared version; changing it is a
-  deliberate user action.
+- **schemaVersion** — integer, for future migrations. **3** is the current
+  version: 2 named every field and deprecated the duplicates (see Migration), 3
+  adds `projects`. Documentary: nothing branches on it yet, and no automated run
+  may bump it. `validate-state.py` reports the declared version; changing it is a
+  deliberate user action. A file still declaring 2 is served normally - `projects`
+  is optional and no existing field moved, so the bump is a one-line no-op.
 - **lastSwept** — ISO 8601 of the last successful sweep, or null.
 - **promises** — the ledger proper (array of promise records below).
 - **dedup.seen** — ids of items already decoded, so nothing is re-decoded.
@@ -67,6 +68,12 @@ plus the minimum needed to track and dedup. Everything else it references via
   that has quietly returned nothing for days is visible rather than assumed
   healthy. Cap it (keep the last ~10 runs); it is a log, not a store. Surfaced
   by `doctor`.
+- **projects** — array of project records: a declared grouping of promises that
+  already exist, so a multi-week effort has something that notices when it goes
+  quiet. `{ id, name, status, aliases, include, targetDate, snoozedUntil, note,
+  updated }`. A project never owns or changes a promise, and its `targetDate`
+  never becomes a second definition of `overdue`. Membership, both lag signals
+  and their thresholds live in `reference/projects.md`, stated once.
 - **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, deadlineTypeReason,
   verifyStatus, verifyReason, lastVerified, source, noteOnly, dismissedFromBoard,
   frontmatterWarning, markMetDraft, updateDraft, appliedMarkMet } }`. Overlay

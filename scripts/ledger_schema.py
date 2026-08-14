@@ -15,14 +15,14 @@ safe to write.
 
 import re
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SWEEP_LOG_CAP = 10
 
-# --- what schemaVersion 2 defines -----------------------------------------
+# --- what schemaVersion 3 defines -----------------------------------------
 TOP_LEVEL = {
     "schemaVersion", "lastSwept", "promises", "dedup", "knownChannels",
     "watchedThreads", "dismissedFromBoard", "suppressed", "people", "sweepLog",
-    "itemMeta",
+    "itemMeta", "projects",
 }
 PROMISE = {
     "id", "title", "context", "direction", "what", "owner", "expectBy", "status",
@@ -30,6 +30,10 @@ PROMISE = {
     "lastVerified", "verifyStatus", "verifyReason", "why", "deadlineType",
     "snoozedUntil", "driftClearedUntil", "history", "promotedTo", "note",
     "completedDate", "relatedRefs",
+}
+PROJECT = {
+    "id", "name", "status", "aliases", "include", "targetDate", "snoozedUntil",
+    "note", "updated",
 }
 ITEM_META = {
     "snoozedUntil", "deadlineType", "deadlineTypeReason", "verifyStatus",
@@ -52,7 +56,9 @@ DEPRECATED = {
     },
 }
 
-LEVEL_KEYS = {"top": TOP_LEVEL, "promise": PROMISE, "itemMeta": ITEM_META}
+LEVEL_KEYS = {
+    "top": TOP_LEVEL, "promise": PROMISE, "itemMeta": ITEM_META, "project": PROJECT,
+}
 
 # --- legal values ---------------------------------------------------------
 DIRECTIONS = ("they-owe-me", "i-owe-them")
@@ -63,6 +69,10 @@ VERIFY_STATUSES = (
     "verified-open", "resolved", "reassigned", "mis-attributed", "unverifiable", None,
 )
 DEADLINE_TYPES = ("hard", "soft", "none")
+# a project is `active` or it is `done`. There is deliberately no `paused`:
+# `snoozedUntil` already means "quiet, and it comes back" everywhere else in this
+# schema, and a paused project is one more thing that silently drops out of view
+PROJECT_STATUSES = ("active", "done")
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # ISO 8601 with an optional time part; deliberately permissive about offsets,
@@ -188,6 +198,62 @@ def validate_promise(record, enforce_reality_gate=True):
     return problems
 
 
+def validate_project(record):
+    """Shape + enum check for one project record. Returns a list of problems.
+
+    A project groups promises that already exist; it never owns them and never
+    carries a deadline of its own that could compete with a promise's `expectBy`
+    (see `reference/projects.md`). `targetDate` drives the project-level slipping
+    signal and nothing else.
+    """
+    problems = []
+    if not isinstance(record, dict):
+        return ["project is not an object"]
+
+    for key in sorted(set(record) - PROJECT):
+        problems.append(
+            "unknown field `%s` - not in schemaVersion %d; name it in "
+            "reference/ledger-schema.md first" % (key, SCHEMA_VERSION)
+        )
+
+    for required in ("id", "name"):
+        if not str(record.get(required) or "").strip():
+            problems.append("`%s` is required" % required)
+
+    if record.get("status") not in PROJECT_STATUSES:
+        problems.append(
+            "`status` must be one of %s, got %r"
+            % (list(PROJECT_STATUSES), record.get("status"))
+        )
+
+    for field in ("aliases", "include"):
+        value = record.get(field)
+        if value is not None and not isinstance(value, list):
+            problems.append("`%s` must be a list" % field)
+        elif isinstance(value, list):
+            for index, entry in enumerate(value):
+                if not isinstance(entry, str) or not entry.strip():
+                    problems.append("`%s[%d]` must be a non-empty string" % (field, index))
+
+    # a project with neither an alias nor a pinned member can never gain a
+    # member, so it can never lag and can never clear: it is furniture
+    if not (record.get("aliases") or record.get("include")):
+        problems.append(
+            "a project needs at least one `aliases` entry or one `include` id, "
+            "or nothing can ever be a member of it"
+        )
+
+    for field in ("targetDate", "snoozedUntil"):
+        value = record.get(field)
+        if value not in (None, "") and not _is_date(value):
+            problems.append("`%s` must be YYYY-MM-DD, got %r" % (field, value))
+    updated = record.get("updated")
+    if updated not in (None, "") and not _is_iso(updated):
+        problems.append("`updated` must be ISO 8601, got %r" % updated)
+
+    return problems
+
+
 def validate_state(state):
     """Structural check on a whole state.json. Returns a list of problems.
 
@@ -222,6 +288,27 @@ def validate_state(state):
             seen_ids[pid] = index
         for problem in validate_promise(record, enforce_reality_gate=False):
             problems.append("promises[%d] (%s): %s" % (index, pid, problem))
+
+    projects = state.get("projects")
+    if projects is not None and not isinstance(projects, list):
+        problems.append("`projects` must be a list")
+        projects = None
+    if isinstance(projects, list):
+        seen_projects = {}
+        for index, record in enumerate(projects):
+            if not isinstance(record, dict):
+                problems.append("projects[%d] is not an object" % index)
+                continue
+            key = record.get("id")
+            if key in seen_projects:
+                problems.append(
+                    "duplicate project id %r at projects[%d] and projects[%d]"
+                    % (key, seen_projects[key], index)
+                )
+            else:
+                seen_projects[key] = index
+            for problem in validate_project(record):
+                problems.append("projects[%d] (%s): %s" % (index, key, problem))
 
     item_meta = state.get("itemMeta")
     if item_meta is not None and not isinstance(item_meta, dict):

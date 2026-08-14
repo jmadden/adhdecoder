@@ -135,8 +135,8 @@ with no `expectBy`, drift uses a **staleness** signal instead: days since
 fastest. It means "waiting on someone else, nothing to do until they reply" -
 that deserves patience, not urgency. An earlier version of this logic
 fast-tracked `blocked` to the same 2-day tier as high-stakes (found 2026-08-14):
-a note correctly parked as "waiting on TEXAR" surfaced as urgent exactly as fast
-as something genuinely stuck in Jim's own queue, which is what produced false
+a note correctly parked as "waiting on a vendor" surfaced as urgent exactly as fast
+as something genuinely stuck in the user's own queue, which is what produced false
 "your move" readings on items nobody was actually waiting on him for.
 
 **The thresholds live in `scripts/ledger_query.py`** (`STALE_DAYS_HIGH` /

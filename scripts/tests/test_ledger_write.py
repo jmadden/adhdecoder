@@ -477,6 +477,78 @@ def main():
             "the other session's write survives intact after the refusal",
         )
 
+        # --- project-set ----------------------------------------------------
+        # No --confirmed: this writes state.json only. That flag exists because
+        # capture/promote create files in the user's vault, and using it here
+        # would weaken the one place it means something.
+        result = run(config_path, [
+            "project-set", "--id", "acme", "--name", "Acme rollout",
+            "--alias", "Acme Corp",
+        ])
+        check(
+            result.returncode == 0 and "declared project acme" in result.stdout,
+            "a project is declared with no --confirmed (state.json only)",
+        )
+        state = json.loads(state_path.read_text())
+        declared = [p for p in state.get("projects", []) if p["id"] == "acme"]
+        check(
+            len(declared) == 1 and declared[0]["status"] == "active",
+            "the project is in the file exactly once, active by default",
+        )
+
+        before_bytes = state_path.read_bytes()
+        result = run(config_path, [
+            "project-set", "--id", "rival", "--name", "Rival", "--alias", "acme corp",
+        ])
+        check(
+            result.returncode == 1 and "already claimed" in result.stderr,
+            "an alias another project claims is refused - first-wins would make "
+            "membership depend on the order of the projects array",
+        )
+        result = run(config_path, ["project-set", "--id", "unreachable", "--name", "Empty"])
+        check(
+            result.returncode == 1 and "at least one" in result.stderr,
+            "a project with no alias and no pinned id is refused: nothing could "
+            "ever be a member of it",
+        )
+        result = run(config_path, [
+            "project-set", "--id", "nowhere", "--name", "Ghost", "--include", "no-such-id",
+        ])
+        check(
+            result.returncode == 1 and "cannot see" in result.stderr,
+            "pinning an id the Query cannot see is refused",
+        )
+        result = run(config_path, ["project-set", "--id", "acme", "--snooze", "2020-01-01"])
+        check(
+            result.returncode == 1 and "not in the future" in result.stderr,
+            "a snooze date in the past is refused rather than silently doing nothing",
+        )
+        check(
+            state_path.read_bytes() == before_bytes,
+            "every refused project write left the ledger byte-identical",
+        )
+
+        result = run(config_path, [
+            "--dry-run", "project-set", "--id", "acme", "--name", "Renamed",
+        ])
+        check(
+            result.returncode == 0 and "dry run" in result.stdout
+            and state_path.read_bytes() == before_bytes,
+            "--dry-run prints the record and writes nothing",
+        )
+
+        result = run(config_path, [
+            "project-set", "--id", "acme", "--status", "done", "--target-date", "2026-09-01",
+        ])
+        state = json.loads(state_path.read_text())
+        declared = [p for p in state["projects"] if p["id"] == "acme"][0]
+        check(
+            result.returncode == 0 and declared["status"] == "done"
+            and declared["targetDate"] == "2026-09-01"
+            and declared["aliases"] == ["Acme Corp"],
+            "an update amends only what was passed and keeps the rest",
+        )
+
     print()
     if FAILURES:
         print("%d check(s) failed:" % len(FAILURES))

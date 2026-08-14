@@ -186,6 +186,62 @@ def main():
             in html,
             "the board note counts the dismissed items a draft revived",
         )
+
+        # --- projects: the tab always, the Board-tab block only when lagging --
+        check(
+            'id="pane-projects"' in html and "Upsilon rollout" in html,
+            "the Projects tab renders each declared project",
+        )
+        check(
+            "Projects worth a look" in html
+            and "nothing has moved in" in html,
+            "a lagging project surfaces on the Board tab itself",
+        )
+        check(
+            "Omicron integration" in html
+            and "Omicron integration" not in html.split("Projects worth a look")[1].split("</div>")[0],
+            "a healthy project appears on the tab but NOT in the lagging block",
+        )
+        check(
+            "projects lagging" in html or "project lagging" in html,
+            "the headline count names lagging projects when there are any",
+        )
+        check(
+            "Nothing tagged yet" in html,
+            "a project with no members still renders (its emptiness is the point)",
+        )
+
+        # A board with NOTHING lagging must render the block as empty and must
+        # not crash. The injection point is unconditional and the renderer
+        # returns "" - if a future edit deletes the marker instead, render()
+        # raises SystemExit, and it would do so on exactly the calm board this
+        # feature promises to leave alone.
+        calm = tmp / "calm"
+        shutil.copytree(tmp, calm, ignore=shutil.ignore_patterns("calm"))
+        calm_config = calm / "config.json"
+        raw = json.loads(calm_config.read_text())
+        raw["storage"]["instancePath"] = str(calm / "instance")
+        raw["storage"]["knowledgePath"] = str(calm / "vault")
+        raw["schedule"]["boardPath"] = str(calm / "Board.html")
+        calm_config.write_text(json.dumps(raw, indent=2))
+        calm_state = calm / "instance" / "state.json"
+        data = json.loads(calm_state.read_text())
+        data["projects"] = []
+        calm_state.write_text(json.dumps(data, indent=2))
+        run(calm_config)
+        calm_html = (calm / "Board.html").read_text()
+        check(
+            "Projects worth a look" not in calm_html,
+            "with nothing lagging, the Board tab carries no projects section at all",
+        )
+        check(
+            "lagging" not in calm_html.split('<div class="counts">')[1].split("</div>")[0],
+            "and the headline count says nothing about projects",
+        )
+        check(
+            'id="pane-projects"' in calm_html and "No projects declared" in calm_html,
+            "the Projects tab still exists and explains how to populate it",
+        )
         check(
             "<b>2</b> ready to close, <b>6</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
             in html,

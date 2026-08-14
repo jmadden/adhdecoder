@@ -212,5 +212,70 @@
       "frontmatterWarning": "priority: medium but the note body calls this urgent",
       "inventedOverlayField": "a field no schema version defines"
     }
-  }
+  },
+  "projects": [
+    {
+      "id": "upsilon",
+      "name": "Upsilon rollout",
+      "status": "active",
+      "aliases": [
+        "Upsilon Bank"
+      ],
+      "include": [],
+      "updated": "2026-08-01T09:00:00-07:00"
+    },
+    {
+      "id": "gamma",
+      "name": "Gamma header work",
+      "status": "active",
+      "aliases": [
+        "Gamma Group"
+      ],
+      "include": [],
+      "updated": "2026-08-01T09:00:00-07:00"
+    },
+    {
+      "id": "omicron",
+      "name": "Omicron integration",
+      "status": "active",
+      "aliases": [
+        "Omicron Bank"
+      ],
+      "include": [],
+      "updated": "2026-08-01T09:00:00-07:00"
+    },
+    {
+      "id": "epsilon",
+      "name": "Epsilon onboarding",
+      "status": "active",
+      "aliases": [
+        "Epsilon Inc"
+      ],
+      "include": [
+        "ISSUE-321:kappa-handover"
+      ],
+      "updated": "2026-08-01T09:00:00-07:00"
+    },
+    {
+      "id": "mu",
+      "name": "Mu quarterly",
+      "status": "active",
+      "aliases": [
+        "Mu Holdings"
+      ],
+      "include": [],
+      "targetDate": "2026-08-15",
+      "updated": "2026-08-01T09:00:00-07:00"
+    },
+    {
+      "id": "empty",
+      "name": "Nothing tagged yet",
+      "status": "active",
+      "aliases": [
+        "No Such Customer"
+      ],
+      "include": [],
+      "updated": "2026-08-01T09:00:00-07:00"
+    }
+  ]
 }

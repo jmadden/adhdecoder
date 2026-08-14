@@ -77,6 +77,21 @@ def whats(payload):
     return {p.get("what") or p.get("title") for p in payload["promises"]}
 
 
+def project_rollups(config_path, extra=()):
+    """`--projects --json` through the CLI, exactly as a skill would call it."""
+    result = subprocess.run(
+        [
+            sys.executable, str(SCRIPT), "--config", str(config_path),
+            "--now", NOW, "--projects", "--json", *extra,
+        ],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(result.stdout, result.stderr)
+        raise SystemExit("ledger_query.py --projects exited %d" % result.returncode)
+    return json.loads(result.stdout)["projects"]
+
+
 def main():
     with tempfile.TemporaryDirectory() as raw_tmp:
         tmp = Path(raw_tmp)
@@ -129,7 +144,7 @@ def main():
             "a blocked, high-stakes item untouched only 4 business days does NOT "
             "drift (the actual bug: blocked used to share the 2-day high-stakes "
             "threshold, so a note correctly parked as 'waiting on someone else' "
-            "surfaced exactly as fast as something genuinely stuck on Jim)",
+            "surfaced exactly as fast as something genuinely stuck on the user)",
         )
         check(
             "Wait on Upsilon Bank for the vendor contact" in drifting,
@@ -244,6 +259,89 @@ def main():
             "a stored itemMeta.frontmatterWarning recorded AFTER the note's "
             "dateModified is ALSO not shown - a fresh timestamp on a stored lint "
             "proves nothing about whether the lint still holds",
+        )
+
+        # --- projects: the rollup and both lag signals -----------------------
+        rollups = {r["id"]: r for r in project_rollups(config_path)}
+        check(
+            rollups["upsilon"]["rollup"]["lag"] == "quiet",
+            "a project whose work has not moved in the threshold goes quiet",
+        )
+        check(
+            rollups["gamma"]["rollup"]["openCount"] == 0
+            and rollups["gamma"]["rollup"]["lag"] == "quiet",
+            "a project with ZERO open items still goes quiet - nothing else would "
+            "ever surface it, which is the case a movement signal that required "
+            "open work would miss forever",
+        )
+        check(
+            rollups["omicron"]["rollup"]["lag"] is None
+            and rollups["omicron"]["rollup"]["memberCount"] == 2,
+            "a project that moved recently does not lag",
+        )
+        check(
+            rollups["epsilon"]["rollup"]["openCount"] == 0
+            and rollups["epsilon"]["rollup"]["lag"] is None,
+            "a project whose last item closed TODAY is silent, not instantly "
+            "reported as having nothing left",
+        )
+        check(
+            rollups["mu"]["rollup"]["lag"] == "date-slipping"
+            and rollups["mu"]["rollup"]["movementDays"] <= 2,
+            "a target date closing in flags even while the work is moving",
+        )
+        check(
+            rollups["empty"]["rollup"]["memberCount"] == 0
+            and rollups["empty"]["rollup"]["lag"] is None,
+            "a just-declared project with nothing tagged is silent, not lagging",
+        )
+        check(
+            "ISSUE-321:kappa-handover" in rollups["epsilon"]["rollup"]["memberIds"],
+            "an `include` id joins the project even though its context does not match",
+        )
+        # movement means WORK moved. `lastVerified` is when the system last
+        # LOOKED, and a sweep refreshes it on everything it touches - counting it
+        # would mean a swept ledger can never go quiet, so the automated pass
+        # meant to catch a stalled project would be what hides it.
+        gamma_member = [
+            p for p in q(config_path, "all")["promises"]
+            if p["id"] in rollups["gamma"]["rollup"]["memberIds"]
+        ]
+        check(
+            gamma_member
+            and str(gamma_member[0].get("lastVerified") or "")
+            > rollups["gamma"]["rollup"]["lastMovement"],
+            "a fresh lastVerified does NOT count as movement (its member was "
+            "verified after the last real edit, and the project is still quiet)",
+        )
+
+        # the two off-switches, checked on a mutated copy rather than by adding
+        # more permanent fixture permutations
+        probe = tmp / "probe"
+        shutil.copytree(tmp, probe, ignore=shutil.ignore_patterns("probe"))
+        probe_state = probe / "instance" / "state.json"
+        probe_config = probe / "config.json"
+        raw = json.loads(probe_config.read_text())
+        raw["storage"]["instancePath"] = str(probe / "instance")
+        raw["storage"]["knowledgePath"] = str(probe / "vault")
+        probe_config.write_text(json.dumps(raw, indent=2))
+        data = json.loads(probe_state.read_text())
+        for record in data["projects"]:
+            if record["id"] == "upsilon":
+                record["snoozedUntil"] = "2026-09-01"
+            if record["id"] == "gamma":
+                record["status"] = "done"
+        probe_state.write_text(json.dumps(data, indent=2))
+        probed = {r["id"]: r for r in project_rollups(probe_config)}
+        check(
+            probed["upsilon"]["rollup"]["lag"] is None
+            and probed["upsilon"]["rollup"]["snoozed"],
+            "a snoozed project stops lagging",
+        )
+        check(
+            probed["gamma"]["rollup"]["lag"] is None,
+            "a project marked done stops lagging (and is still returned, so a "
+            "surface can render it rather than it vanishing)",
         )
 
         # --- a duplicate key parses cleanly but must not pass silently -----

@@ -72,6 +72,8 @@ scripts/tests/                fixture test + invented fixture ledger. The fixtur
                               state file is `fixtures/ledger/fixture-state.json`,
                               NOT `state.json`, so .gitignore's instance-data
                               guards stay intact
+reference/projects.md         what a project is: membership, the two lag
+                              signals and their thresholds, stated once
 reference/method.md           the durable method (the brain)
 reference/ledger-schema.md    promise record shape + itemMeta companion
 reference/*.md                per-capability specs (sweep, reconciliation,

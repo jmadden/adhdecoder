@@ -6,7 +6,7 @@ same inputs in, byte-identical HTML out. Writes only `config.schedule.boardPath`
 
 **The read lives in `ledger_query.py`**, which is the one implementation of the
 Query every read-side skill calls. This file owns only what is board-specific:
-grouping into the five tabs and the four colour groups, card copy, and the HTML.
+grouping into the six tabs and the four colour groups, card copy, and the HTML.
 Derived state (`overdue`, staleness, snooze, ready-to-close) is not recomputed
 here, so the board and every chase agree about the same ledger.
 
@@ -463,30 +463,149 @@ def board_note(board, failures, collapsed, warnings, config):
     return " ".join(parts)
 
 
-def counts_line(board, waiting_tab, shipped):
-    return (
+def counts_line(board, waiting_tab, shipped, lagging=()):
+    line = (
         "<b>%d</b> ready to close, <b>%d</b> need your move, "
         "<b>%d</b> waiting, <b>%d</b> shipped"
         % (len(board["ready"]), len(board["move"]), len(waiting_tab), len(shipped))
     )
+    # only when non-zero: a permanent "0 projects lagging" is noise, and the
+    # headline count should read the same on a calm day as it always did
+    if lagging:
+        line += ", <b>%d</b> %s lagging" % (
+            len(lagging), "project" if len(lagging) == 1 else "projects"
+        )
+    return line
 
 
-def render(config, promises, failures, collapsed, warnings, state, now, template_text):
+def projects_html(rollups, promises):
+    """One card per declared project: active first, then closed, both rendered.
+
+    `status: done` gets a section rather than an absence, because a field a run
+    can write and no surface shows is how a correction goes to die.
+    """
+    if not rollups:
+        return (
+            '<p class="pane-note">No projects declared. Run '
+            '<code>ledger_query.py --projects --candidates</code> to see the '
+            "clusters already in your ledger.</p>"
+        )
+    by_id = {p.get("id"): p for p in promises}
+    active = [r for r in rollups if r.get("status") != "done"]
+    closed = [r for r in rollups if r.get("status") == "done"]
+    blocks = []
+    for group, label in ((active, None), (closed, "Closed")):
+        if not group:
+            continue
+        if label:
+            blocks.append('<h2 class="section">%s</h2>' % label)
+        blocks.extend(project_card(r, by_id) for r in group)
+    return "\n".join(blocks)
+
+
+def project_card(project, by_id):
+    roll = project["rollup"]
+    classes = "proj"
+    if roll["lag"]:
+        classes += " lagging"
+    if project.get("status") == "done":
+        classes += " closed"
+
+    chips = []
+    if roll["lag"]:
+        chips.append('<span class="plag">%s</span>' % esc(roll["lag"]))
+    if roll["snoozed"]:
+        chips.append(
+            '<span class="chip c-need">snoozed to %s</span>' % esc(project.get("snoozedUntil"))
+        )
+    if project.get("targetDate"):
+        chips.append('<span class="chip c-proj">target %s</span>' % esc(project["targetDate"]))
+
+    meta = "%s, %s open" % (plural(roll["memberCount"], "item"), roll["openCount"])
+    if roll["spanDays"]:
+        meta += " over %s" % plural(roll["spanDays"] // 7 or 1, "week")
+    meta += " | last movement %s" % (roll["lastMovement"] or "never")
+    if roll["nextDate"]:
+        meta += " | next %s" % roll["nextDate"]
+
+    body = []
+    if project.get("note"):
+        body.append("<p>%s</p>" % esc(project["note"]))
+    if roll["lagReason"]:
+        body.append('<div class="lbl">Why it is flagged</div><p>%s</p>' % esc(roll["lagReason"]))
+    if project.get("aliases"):
+        body.append(
+            '<div class="lbl">Matches</div><div class="chips">%s</div>'
+            % "".join('<span class="chip c-proj">%s</span>' % esc(a) for a in project["aliases"])
+        )
+    members = [by_id[m] for m in roll["memberIds"] if m in by_id]
+    if members:
+        pinned = set(project.get("include") or [])
+        rows = []
+        for member in members:
+            mark = " <span class=\"chip c-need\">pinned</span>" if member.get("id") in pinned else ""
+            state_word = "open" if member["_open"] else "done"
+            rows.append(
+                "<li>%s <span class=\"pmeta\">(%s)</span>%s</li>"
+                % (esc(member.get("what") or member.get("title")), state_word, mark)
+            )
+        body.append('<div class="lbl">Members</div><ul>%s</ul>' % "".join(rows))
+    body.append(
+        '<div class="lbl">Declared</div><p class="pmeta">%s</p>'
+        % esc(project.get("updated") or "unknown")
+    )
+
+    return (
+        '<details class="%s">\n'
+        '  <summary><span class="pname">%s</span>%s<span class="pmeta">%s</span></summary>\n'
+        '  <div class="pbody">%s</div>\n'
+        "</details>"
+    ) % (classes, esc(project.get("name")), "".join(chips), esc(meta), "".join(body))
+
+
+def lagging_html(rollups):
+    """The Board-tab block. EMPTY when nothing lags - that is the whole point.
+
+    A permanent projects section on the main board would be one more thing to
+    scan every day. This appears only when a project has actually gone quiet or
+    its target date is closing in, and is otherwise invisible.
+    """
+    lagging = [r for r in rollups if r["rollup"]["lag"]]
+    if not lagging:
+        return ""
+    rows = "".join(
+        '<div class="lagrow"><b>%s</b> <span class="lwhy">%s</span></div>'
+        % (esc(r.get("name")), esc(r["rollup"]["lagReason"]))
+        for r in lagging
+    )
+    return (
+        '<h2 class="section">Projects worth a look</h2>\n'
+        '<div class="laglist">%s</div>' % rows
+    )
+
+
+def render(config, promises, failures, collapsed, warnings, state, now, template_text,
+           rollups=()):
     board, tomorrow, waiting_tab, shipped, history = group_promises(promises, now)
+    rollups = list(rollups)
+    lagging = [r for r in rollups if r["rollup"]["lag"]]
     out = template_text
     tokens = {
         "{{LAST_SWEPT}}": esc(humanize_since(state.get("lastSwept"), now)),
-        "{{COUNTS}}": counts_line(board, waiting_tab, shipped),
+        "{{COUNTS}}": counts_line(board, waiting_tab, shipped, lagging),
         "{{N_SHIPPED}}": str(len(shipped)),
         "{{N_WAITING}}": str(len(waiting_tab)),
         "{{N_TOMORROW}}": str(len(tomorrow)),
         "{{N_HISTORY}}": str(len(history)),
+        "{{N_PROJECTS}}": str(len(rollups)),
         "{{BOARD_NOTE}}": esc(board_note(board, failures, collapsed, warnings, config)),
     }
     for token, value in tokens.items():
         out = out.replace(token, value)
 
     injections = [
+        (r"<!-- RENDER lagging projects here.*?-->", lagging_html(rollups)),
+        (r"<!-- RENDER project cards here -->", projects_html(rollups, promises)),
         (r"<!-- RENDER today color groups here:.*?-->", board_groups_html(board, config, now)),
         (r"<!-- RENDER \.win rows here -->", shipped_html(shipped)),
         (r"<!-- RENDER \.waitrow rows here -->", waiting_html(waiting_tab, now)),
@@ -497,7 +616,7 @@ def render(config, promises, failures, collapsed, warnings, state, now, template
         out, hits = re.subn(pattern, lambda _m, r=replacement: r, out, count=1, flags=re.S)
         if not hits:
             raise SystemExit("template is missing an injection point: %s" % pattern)
-    return out, (board, tomorrow, waiting_tab, shipped, history)
+    return out, (board, tomorrow, waiting_tab, shipped, history, rollups)
 
 
 def write_atomic(target, text):
@@ -549,9 +668,10 @@ def main(argv=None):
     state = query_meta["state"]
     warnings = query_meta["warnings"]
     text, groups = render(
-        config, promises, failures, collapsed, warnings, state, now, template_text
+        config, promises, failures, collapsed, warnings, state, now, template_text,
+        query_meta["projects"],
     )
-    board, tomorrow, waiting_tab, shipped, history = groups
+    board, tomorrow, waiting_tab, shipped, history, rollups = groups
 
     target = args.out or config.board_path
     if target:
@@ -560,11 +680,13 @@ def main(argv=None):
     if not args.quiet:
         summary = (
             "ready-to-close %d | your-move %d | waiting-group %d | done-today %d | "
-            "waiting-tab %d | tomorrow %d | shipped %d | history %d | parse-failures %d"
+            "waiting-tab %d | tomorrow %d | shipped %d | history %d | "
+            "projects %d (%d lagging) | parse-failures %d"
             % (
                 len(board["ready"]), len(board["move"]), len(board["waiting"]),
                 len(board["done"]), len(waiting_tab), len(tomorrow), len(shipped),
-                len(history), len(failures),
+                len(history), len(rollups),
+                len([r for r in rollups if r["rollup"]["lag"]]), len(failures),
             )
         )
         print(summary)
@@ -572,6 +694,10 @@ def main(argv=None):
             print("  parse failure: %s (%s)" % (failure["file"], failure["symptom"]))
         for warning in warnings:
             print("  frontmatter warning: %s (%s)" % (warning["file"], warning["warning"]))
+        for record in rollups:
+            if record["rollup"]["lag"]:
+                print("  project lagging: %s (%s)"
+                      % (record.get("name"), record["rollup"]["lagReason"]))
         for item in sorted(collapsed, key=lambda c: c["id"]):
             print("  deduped: state.json %s collapsed into %s" % (item["id"], item["into"]))
         print("board: %s" % (target if target else "(boardPath unset, nothing written)"))

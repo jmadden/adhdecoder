@@ -141,6 +141,20 @@ itself.
 
 ## Getting the promise set for a context
 
+**Which contexts exist is a question, not an assumption.** Ask the Query rather
+than working from the name in the user's request or your memory of the ledger:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --projects --json
+```
+
+Each declared project carries the `aliases` it matches, which is what reconciles
+the several spellings one customer accumulates ("Acme CU" and "Acme Credit
+Union" are one context, and publishing two half-status posts for one customer is
+worse than publishing none). Use `--project <id>` to scope to a project's
+members; fall back to `--context` for anything not yet declared.
+
 **Do not re-derive the read.** Ask the Query, scoped to the context:
 
 ```
@@ -148,7 +162,8 @@ python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
     --select open --context "<context>" --json
 ```
 
-Add `--select waiting` for what that context owes back, and
+(or `--project <id>` for a declared project). Add `--select waiting` for what
+that context owes back, and
 `--select closed --context "<context>"` for what has shipped. `derived` carries
 `overdue`, `dueSoon` and `readyToClose` already computed, so the status you
 publish matches the board the user is looking at.

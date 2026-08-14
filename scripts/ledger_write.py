@@ -63,7 +63,9 @@ from ledger_schema import (  # noqa: E402
     SCHEMA_VERSION,
     SWEEP_LOG_CAP,
     VERIFY_STATUSES,
+    PROJECT_STATUSES,
     reality_gate,
+    validate_project,
     validate_promise,
     validate_state,
 )
@@ -772,8 +774,125 @@ def op_mark_seen(args, config, now):
     return 0
 
 
+def op_project_set(args, config, now):
+    """Declare or amend a project. state.json only - no note is ever written.
+
+    Deliberately ONE op rather than add/update/snooze/close: five ops would mean
+    five refusal surfaces to keep consistent, and the refusals are the point.
+    No `--confirmed`, unlike `capture`/`promote`: that flag exists because those
+    create files in the user's vault, and diluting it weakens the one place it
+    matters.
+    """
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    projects = state.setdefault("projects", [])
+    target = None
+    for record in projects:
+        if record.get("id") == args.id:
+            target = record
+            break
+
+    creating = target is None
+    if creating:
+        if not args.name:
+            raise Refused("a new project needs --name")
+        target = {
+            "id": args.id, "name": args.name, "status": "active",
+            "aliases": [], "include": [],
+        }
+
+    updated = dict(target)
+    if args.name:
+        updated["name"] = args.name
+    if args.status:
+        updated["status"] = args.status
+    if args.note is not None:
+        updated["note"] = args.note or None
+
+    aliases = [] if args.replace_aliases else list(updated.get("aliases") or [])
+    for alias in args.alias or []:
+        if lq.canonical(alias) not in {lq.canonical(a) for a in aliases}:
+            aliases.append(alias)
+    for alias in args.unalias or []:
+        aliases = [a for a in aliases if lq.canonical(a) != lq.canonical(alias)]
+    updated["aliases"] = aliases
+
+    include = list(updated.get("include") or [])
+    for pid in args.include or []:
+        if pid not in include:
+            include.append(pid)
+    for pid in args.uninclude or []:
+        include = [i for i in include if i != pid]
+    updated["include"] = include
+
+    if args.target_date is not None:
+        updated["targetDate"] = args.target_date or None
+    if args.unsnooze:
+        updated["snoozedUntil"] = None
+    elif args.snooze:
+        if lq.as_date(args.snooze) and lq.as_date(args.snooze) <= now.date():
+            raise Refused(
+                "--snooze %s is not in the future; it would read as an applied "
+                "off-switch while changing nothing." % args.snooze
+            )
+        updated["snoozedUntil"] = args.snooze
+    updated["updated"] = now.isoformat(timespec="seconds")
+
+    # an alias another project already claims would make membership depend on
+    # the order of the projects array - a silent, order-dependent bug
+    for other in projects:
+        if other.get("id") == args.id:
+            continue
+        clash = {lq.canonical(a) for a in (other.get("aliases") or [])} & {
+            lq.canonical(a) for a in aliases
+        }
+        if clash:
+            raise Refused(
+                "alias %r is already claimed by project %r. One alias belongs to "
+                "one project, or membership depends on array order."
+                % (sorted(clash)[0], other.get("id"))
+            )
+
+    problems = validate_project(updated)
+    if problems:
+        raise Refused("refusing to write project %r:\n  %s" % (args.id, "\n  ".join(problems)))
+
+    # a pinned id nothing can see is a member that will never appear
+    if include:
+        visible = {p.get("id") for p in existing_union(config, now)}
+        missing = [i for i in include if i not in visible]
+        if missing:
+            raise Refused(
+                "--include names %d id(s) the Query cannot see: %s\n"
+                "A pinned id that matches no promise is a member that never "
+                "appears. Check the id, or drop the pin."
+                % (len(missing), ", ".join(sorted(missing)[:5]))
+            )
+
+    if args.dry_run:
+        print(json.dumps(updated, indent=2, sort_keys=True))
+        print("dry run: nothing written")
+        return 0
+
+    if creating:
+        projects.append(updated)
+    else:
+        projects[projects.index(target)] = updated
+
+    backup_path = backup(config.state_file, config.instance_path)
+    commit(config.state_file, state, before, backup_path, problems_before)
+    print(
+        "%s project %s (%d alias(es), %d pinned)"
+        % ("declared" if creating else "updated", args.id, len(aliases), len(include))
+    )
+    return 0
+
+
 OPS = {
     "capture": op_capture,
+    "project-set": op_project_set,
     "promote": op_promote,
     "add": op_add,
     "enrich": op_enrich,
@@ -841,6 +960,24 @@ def main(argv=None):
 
     p_sweep = sub.add_parser("record-sweep", help="stamp lastSwept + append a sweepLog entry")
     p_sweep.add_argument("--sources-json", default=None, help="JSON {source: result}; stdin if omitted")
+
+    p_project = sub.add_parser(
+        "project-set", help="declare or amend a project (state.json only)"
+    )
+    p_project.add_argument("--id", required=True, help="stable slug")
+    p_project.add_argument("--name", default=None)
+    p_project.add_argument("--status", default=None, choices=PROJECT_STATUSES)
+    p_project.add_argument("--alias", action="append", help="a context spelling to match")
+    p_project.add_argument("--unalias", action="append")
+    p_project.add_argument(
+        "--replace-aliases", action="store_true", help="drop existing aliases first"
+    )
+    p_project.add_argument("--include", action="append", help="pin a promise id")
+    p_project.add_argument("--uninclude", action="append")
+    p_project.add_argument("--target-date", default=None, help="YYYY-MM-DD, or '' to clear")
+    p_project.add_argument("--snooze", default=None, help="quiet until YYYY-MM-DD")
+    p_project.add_argument("--unsnooze", action="store_true")
+    p_project.add_argument("--note", default=None)
 
     p_seen = sub.add_parser("mark-seen", help="add decoded ids to dedup.seen")
     p_seen.add_argument("--id", action="append", required=True)

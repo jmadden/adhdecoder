@@ -98,7 +98,8 @@ Not sure your setup is sound? Ask **`doctor`** ("check my setup").
 | `ledger.backend` | `"builtin"` (default, writes `state.json`) or a note-backed adapter name |
 | `ledger.writeMode` | `"readonly"` (default) or `"readwrite"` (post-cutover only; see below) |
 | `ledger.cutover.singleWriterConfirmed` | your explicit confirmation that nothing else writes the note store; required for `readwrite` |
-| `watchlist.customers` / `.projects` / `.people` | priority entities that raise stakes |
+| `watchlist.customers` / `.people` | priority entities that raise stakes |
+| `projects` (in `state.json`, not config) | declared multi-week efforts; see `reference/projects.md` |
 | `contacts` | per-context channels + people (used by reconcile / sweep) |
 | `sources[].type` | `issues` \| `chat` \| `email` \| `calendar` \| `crm` \| `docs` \| `calls` |
 | `sources[].enabled` | whether this source is swept |
@@ -163,7 +164,7 @@ print a one-line recap. It drafts and updates only; it never auto-sends or
 auto-posts. Full detail in `reference/scheduling.md`.
 
 The board is a multi-tab HTML **dashboard** (Board / Shipped / Waiting on Others /
-Tomorrow's Headlines / History), regenerated from the ledger each run. The repo
+Tomorrow's Headlines / Projects / History), regenerated from the ledger each run. The repo
 ships a data-free template at `assets/dashboard-template.html`; only the rendered
 output at your `boardPath` holds your data. Ask **"show my board"** or **"refresh
 the dashboard"** any time to re-render it on demand (see `reference/dashboard.md`).

@@ -76,24 +76,24 @@ def main():
         )
 
         # --- version reporting ---------------------------------------------
-        check("schemaVersion: 1 (current is 2" in out, "the declared version is reported")
+        check("schemaVersion: 1 (current is 3" in out, "the declared version is reported")
 
         # --- machine-readable form -----------------------------------------
         as_json = json.loads(run(state, ["--json"]).stdout)
 
-        # --- survivors defined in schemaVersion 2 are silent ---------------
+        # --- survivors defined in the current schema are silent -------------
         # assert on structured keys, not the text: the report's own "note " prefix
         # collides with the `note` field name
         flagged = {f["key"] for f in as_json["gaps"] + as_json["notes"]}
         for survivor in ("people", "sweepLog", "suppressed", "relatedRefs", "note",
                          "deadlineTypeReason", "dismissedFromBoard",
-                         "completedDate", "promotedTo"):
+                         "completedDate", "promotedTo", "projects"):
             check(
                 survivor not in flagged,
-                "a field defined in schemaVersion 2 is not flagged: %s" % survivor,
+                "a field defined in the current schema is not flagged: %s" % survivor,
             )
         check(
-            as_json["expectedSchemaVersion"] == 2 and as_json["schemaVersion"] == 1,
+            as_json["expectedSchemaVersion"] == 3 and as_json["schemaVersion"] == 1,
             "--json reports declared and expected versions",
         )
         check(

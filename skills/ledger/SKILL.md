@@ -83,6 +83,32 @@ Always `--dry-run` first and show the note verbatim; the user approves before it
 is created. The original record is kept, marked `promoted`, and given
 `promotedTo`, so a later sweep enriches the note instead of resurrecting it.
 
+**Track a larger project.** When the user says "track X as a project", "I've
+been assigned X", or asks how a multi-week effort is doing, declare it - a
+project groups promises that already exist and notices when the whole effort
+goes quiet. Start from what is already in the ledger rather than asking them to
+describe it:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <cfg> --projects --candidates
+```
+
+That prints the undeclared clusters with their member counts, date spans, the
+several spellings one customer has accumulated, and a ready-to-paste command.
+Show the candidates, let the user pick, then run the printed command:
+
+```
+python3 <plugin-root>/scripts/ledger_write.py --config <cfg> project-set \
+    --id <slug> --name "<name>" --alias "<spelling>" [--alias "<other spelling>"] \
+    [--target-date YYYY-MM-DD] [--include <promise id>]
+```
+
+`--dry-run` shows the record first. No `--confirmed`: this writes `state.json`
+only, never a note. To split one customer into two workstreams, `--include` the
+member ids - aliases cannot do it, because both workstreams share a `customer`.
+Quiet is silenced with `--snooze YYYY-MM-DD` (returns) or `--status done`
+(permanent). Definitions and thresholds: `reference/projects.md`.
+
 **Update / log progress.** `ledger_write.py … enrich --id <id> --note "<what
 changed>"` - history is append-only and the script enforces it.
 

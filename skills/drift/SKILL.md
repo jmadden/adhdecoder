@@ -103,12 +103,12 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 
    `blocked` and high-stakes are NOT the same signal and get opposite
    treatment. High-stakes-and-actionable gets the SHORT threshold: it matters
-   and it is on Jim, so do not let it rot unnoticed. `blocked` gets the LONGEST
+   and it is on the user, so do not let it rot unnoticed. `blocked` gets the LONGEST
    threshold, even when also high-stakes: it means "waiting on someone else,
    nothing to do until they reply," which deserves patience, not urgency. An
    earlier version of this logic fast-tracked `blocked` to the same 2-day
-   threshold as high-stakes - so a note correctly parked as "waiting on TEXAR"
-   surfaced as urgent just as fast as something genuinely stuck in Jim's own
+   threshold as high-stakes - so a note correctly parked as "waiting on a vendor"
+   surfaced as urgent just as fast as something genuinely stuck in the user's own
    queue. That was the actual complaint behind "why do things that aren't my
    move keep showing up as my move."
 
@@ -180,6 +180,32 @@ ready-to-close. `derived.staleDays` is the business-day count to quote.
 **Yours is the judgment:** which of these is worth surfacing, and the
 observational framing ("hasn't moved in N business days", never an accusation).
 Reconcile each candidate before surfacing it, per the guardrails below.
+
+## Projects that have gone quiet
+
+Drift owns "what has gone quiet", and a multi-week effort can go quiet in a way
+no single promise shows: every item closed, or all of them merely untouched, with
+nothing left to surface it. Ask the same Query:
+
+```
+python3 <plugin-root>/scripts/ledger_query.py --config <instance config.json> \
+    --projects --json
+```
+
+Surface any project whose `rollup.lag` is set, using `rollup.lagReason` verbatim
+as the fact and your own words for the framing. **Do not restate the threshold
+here** - it lives in `reference/projects.md` and nowhere else, for the same
+reason the staleness numbers do (this file and the adapter reference disagreed
+for weeks about 15 versus 5).
+
+Same tone rule, and it matters more here: a project has been quiet for weeks by
+definition, so "this hasn't moved since <date>" is the whole message. Never
+imply the user dropped it. A project is often quiet for a good reason the ledger
+cannot see, so offer the snooze (`project-set --snooze`) as readily as the chase.
+
+If a project has zero open items and is not marked done, say so plainly - that
+is a project with nothing scheduled, not a finished one, and it is the case the
+per-promise signals structurally cannot catch.
 
 ## Guardrails
 

@@ -18,6 +18,10 @@
        and actual-work-remaining were hard to tell apart at a glance. */
     --ready:#0e7490; --ready-soft:#ddf2f7;
     --watch:#8a8f98;
+    /* projects are a different KIND of thing from a card state (a container, not
+       an item), so they get their own neutral-warm accent rather than borrowing
+       one of the four state colours and implying a state they do not have */
+    --proj:#7a5c2e; --proj-soft:#f6efe3;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -137,6 +141,33 @@
   .legend span{display:inline-flex;align-items:center;gap:5px;}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
   .calm{margin:0 0 4px;padding:12px 14px;background:#eef6f1;border:1px solid #cfe7da;border-radius:10px;color:#0f6b49;font-size:14px;}
+  .projlist{display:flex;flex-direction:column;gap:10px;}
+  .proj{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--proj);
+    border-radius:10px;overflow:hidden;}
+  .proj.lagging{border-left-color:var(--flag);}
+  .proj.closed{opacity:.72;}
+  .proj>summary{cursor:pointer;list-style:none;padding:12px 15px;display:flex;align-items:baseline;
+    gap:10px;flex-wrap:wrap;}
+  .proj>summary::-webkit-details-marker{display:none;}
+  .proj>summary::before{content:"\25b8";color:var(--muted);font-size:13px;line-height:1;transition:transform .15s;}
+  .proj[open]>summary::before{transform:rotate(90deg);}
+  .proj>summary:hover{background:#fafbfc;}
+  .proj .pname{font-weight:700;font-size:15px;color:var(--ink);}
+  .proj .pmeta{color:var(--muted);font-size:12.5px;}
+  .proj .plag{font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;
+    background:var(--flag-soft);color:var(--flag);}
+  .proj .pbody{padding:2px 16px 15px 16px;border-top:1px solid var(--line);font-size:13.5px;}
+  .proj .pbody .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);
+    font-weight:700;margin:12px 0 3px;}
+  .proj .pbody ul{margin:0;padding-left:18px;}
+  .proj .pbody li{margin:2px 0;}
+  .c-proj{background:var(--proj-soft);color:var(--proj);}
+  /* the Board-tab lagging block: present only when something is actually lagging */
+  .laglist{display:flex;flex-direction:column;gap:8px;margin:0 0 22px;}
+  .lagrow{background:var(--flag-soft);border:1px solid #f0dcc4;border-radius:8px;padding:9px 12px;
+    font-size:13.5px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+  .lagrow b{color:var(--flag);}
+  .lagrow .lwhy{color:var(--muted);font-size:12.5px;}
   .histlist{display:flex;flex-direction:column;gap:8px;}
   .hist{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
   .hist>summary{cursor:pointer;list-style:none;padding:12px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -169,11 +200,15 @@
     <button class="tabbtn" data-pane="pane-shipped">Shipped <span class="tbadge">{{N_SHIPPED}}</span></button>
     <button class="tabbtn" data-pane="pane-waiting">Waiting on Others <span class="tbadge">{{N_WAITING}}</span></button>
     <button class="tabbtn" data-pane="pane-tomorrow">Tomorrow's Headlines <span class="tbadge">{{N_TOMORROW}}</span></button>
+    <button class="tabbtn" data-pane="pane-projects">Projects <span class="tbadge">{{N_PROJECTS}}</span></button>
     <button class="tabbtn" data-pane="pane-history">History <span class="tbadge">{{N_HISTORY}}</span></button>
   </nav>
 
   <div class="pane active" id="pane-board">
     <div class="calm">{{BOARD_NOTE}}</div>
+    <!-- RENDER lagging projects here (EMPTY STRING when none lag; never remove
+         this marker - the renderer treats a missing injection point as a hard
+         error, so deleting it breaks the calm board, not the loud one) -->
     <h2 class="section">Today</h2>
     <div class="legend" style="margin-top:0;margin-bottom:14px">
       <span><span class="dot" style="background:var(--ready)"></span> Teal = ready to close</span>
@@ -183,7 +218,7 @@
       <span><span class="dot" style="background:var(--flag)"></span> Orange = flag</span>
     </div>
     <!-- RENDER today color groups here: one .today-group per non-empty state, in
-         order Ready to close (green) / Your move (blue) / Waiting (purple) /
+         order Ready to close (teal) / Your move (blue) / Waiting (purple) /
          Done today (green); each group's .big cards go in its .today-grid
          (2 columns). Ready to close leads and is not optional. -->
   </div>
@@ -191,6 +226,7 @@
   <div class="pane" id="pane-shipped"><div class="wins"><!-- RENDER .win rows here --></div></div>
   <div class="pane" id="pane-waiting"><div class="waitlist"><!-- RENDER .waitrow rows here --></div></div>
   <div class="pane" id="pane-tomorrow"><div class="today"><!-- RENDER upcoming .big cards here --></div></div>
+  <div class="pane" id="pane-projects"><div class="projlist"><!-- RENDER project cards here --></div></div>
   <div class="pane" id="pane-history"><div class="histlist"><!-- RENDER .hist details cards here --></div></div>
 
 </div>

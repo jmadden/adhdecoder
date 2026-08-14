@@ -16,7 +16,7 @@ renders. `scripts/tests/test_render_board.py` pins the acceptance criteria again
 an invented fixture ledger.
 
 The repo ships a **data-free** template at `assets/dashboard-template.html`
-(styling, 5 tabs, the state-color legend, tab-switch JS, `{{PLACEHOLDER}}` tokens,
+(styling, 6 tabs, the state-color legend, tab-switch JS, `{{PLACEHOLDER}}` tokens,
 `<!-- RENDER ... -->` injection points, and commented CARD TEMPLATES). The
 renderer fills it from the user's ledger and writes the result to
 `config.schedule.boardPath`. Only that rendered output holds data; the template
@@ -68,7 +68,7 @@ A card asserts a fact or an action, so it must carry a fresh verdict:
 Reconcile only what is actually being rendered, honoring the TTL cache; never the
 whole ledger.
 
-### 3. Group promises into the 5 tabs
+### 3. Group promises into the 6 tabs
 
 Reuse the existing surfacing logic (chase-in / drift / waiting / met-cleared),
 just rendered into HTML. Nothing user-specific is hardcoded; every value comes
@@ -80,6 +80,7 @@ from the ledger + config.
 | **Waiting on Others** (`#pane-waiting .waitlist`) | `.waitrow` | Open `they-owe-me` promises. |
 | **Shipped** (`#pane-shipped .wins`) | `.win` | `met` / `cleared` recently. |
 | **Tomorrow's Headlines** (`#pane-tomorrow .today`) | `.big` | Due-soon / scheduled-ahead upcoming items (not yet actionable today). |
+| **Projects** (`#pane-projects .projlist`) | `.proj` | Declared projects (`state.json` `projects`), lagging first, then a **Closed** section for `status: done`. Each card carries the rollup, the aliases it matches, and its members. |
 | **History** (`#pane-history .histlist`) | `.hist` | All `met` / `cleared`, newest first. |
 
 **Board / Today state color** (the template's `.big` variants). The four states
@@ -120,6 +121,16 @@ tell them apart, and at a glance the board read as more finished than it was.
 Ready to close now has its own `.big.ready` teal variant. Still always emit the
 group label.
 
+**Projects worth a look** (the Board tab's one project surface). Rendered
+immediately under `{{BOARD_NOTE}}`, and **only when a declared project is
+lagging** - otherwise the renderer emits an empty string and the Board tab looks
+exactly as it did before projects existed. That is the point: a permanent
+projects section would be one more thing to scan daily, and the calm board is
+what makes the loud one mean something. The template's injection marker is
+UNCONDITIONAL - `render()` treats a missing injection point as a hard error, so
+deleting the marker breaks the calm board, not the loud one. Signals and
+thresholds: `reference/projects.md`.
+
 Within a section, sort **flagged items first** (those carrying the orange
 `c-flag` chip). **orange** stays the `c-flag` chip, added **only when a real flag
 exists** (high stakes, or hard-`deadlineType` overdue) — never a decorative flag,
@@ -133,11 +144,12 @@ staleness, not as a hard flag.
 | Placeholder | Value |
 |---|---|
 | `{{LAST_SWEPT}}` | `lastSwept`, human-readable (e.g. "2h ago" or the date); "never" if null. |
-| `{{COUNTS}}` | one-line tally, e.g. `<b>N</b> ready to close, <b>N</b> need your move, <b>N</b> waiting, <b>N</b> shipped`. Ready-to-close items are counted separately and excluded from "need your move". |
+| `{{COUNTS}}` | one-line tally, e.g. `<b>N</b> ready to close, <b>N</b> need your move, <b>N</b> waiting, <b>N</b> shipped`. Ready-to-close items are counted separately and excluded from "need your move". A `<b>N</b> projects lagging` clause is appended ONLY when N > 0, so a calm day's headline reads exactly as it always did. |
 | `{{N_SHIPPED}}` | count of Shipped rows. |
 | `{{N_WAITING}}` | count of Waiting-on-Others rows. |
 | `{{N_TOMORROW}}` | count of Tomorrow cards. |
 | `{{N_HISTORY}}` | count of History cards. |
+| `{{N_PROJECTS}}` | count of declared projects (all of them, not just lagging). |
 | `{{BOARD_NOTE}}` | one-line status for the `.calm` banner — a calm "nothing slipping" when the board is clear, else a short "N items need your move" summary. |
 
 The Board tab button has no badge in the template — none is needed.

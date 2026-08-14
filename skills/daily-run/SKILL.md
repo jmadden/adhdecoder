@@ -40,7 +40,9 @@ configured `pivots` (see README) or by the user on demand.
    `scripts/render-board.py` (see below); the script implements
    `reference/dashboard.md`.
 5. **Recap**: one line - ledger freshness (how long since `lastSwept`, now
-   refreshed), what changed, and what is newly slipping. Print to chat.
+   refreshed), what changed, what is newly slipping, and any project the
+   renderer reported as lagging (it prints `project lagging: <name> (<reason>)`;
+   relay it, do not recompute it). Print to chat.
 
 Never auto-send, never auto-post. A run drafts, updates the ledger, and
 refreshes the board; nothing leaves for a customer.
@@ -76,8 +78,9 @@ recap into step 5's line, parse failures included.
 
 It writes to `config.schedule.boardPath`, overwriting in place; a visible file.
 Scheduled runs are non-interactive, so this is the durable place the user looks
-between runs. Each run rebuilds the whole board from the ledger into the five tabs
-(Board / Shipped / Waiting on Others / Tomorrow's Headlines / History), so
+between runs. Each run rebuilds the whole board from the ledger into the six tabs
+(Board / Shipped / Waiting on Others / Tomorrow's Headlines / Projects /
+History), so
 chase-in slips, drift flags, and handoff follow-ups all land on it, each card
 carrying its `verifyStatus` chip + `source.url` + record link.
 
