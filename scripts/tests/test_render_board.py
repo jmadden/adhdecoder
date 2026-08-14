@@ -151,6 +151,24 @@ def main():
             "Spec the header passthrough for Gamma" in ready,
             "a dismissed item carrying markMetDraft renders in Ready to close",
         )
+        # ready-to-close and done-today are different states (confirm vs finished),
+        # so they must not render in the same colour - they did once, and finished
+        # work was indistinguishable from work still owed a decision
+        done_today = group_block(html, "Done today")
+        check(
+            'class="big ready"' in ready and 'class="big done"' not in ready,
+            "Ready to close cards use the ready variant, not the done variant",
+        )
+        check(
+            'class="big done"' in done_today and 'class="big ready"' not in done_today,
+            "Done today cards keep the done variant",
+        )
+        check(
+            ".big.ready{border-left-color:var(--ready);}" in html
+            and "--ready:" in html
+            and "var(--ready)" in ready,
+            "the ready colour is defined and the group dot uses it",
+        )
         check(
             "Answered on the thread on 07/21" in ready,
             "the mark-met draft reason is the card body",

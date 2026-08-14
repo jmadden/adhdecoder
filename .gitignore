@@ -17,3 +17,6 @@ __pycache__/
 
 # Keep the templates tracked (they carry no real data)
 !config/*.example.json
+
+# browser-tool artifacts: a screenshot of a real board is instance data
+.playwright-mcp/

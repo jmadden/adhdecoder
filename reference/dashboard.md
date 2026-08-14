@@ -87,7 +87,7 @@ render as **separate stacked sections**, each a `.today-group` (label + colored
 dot) wrapping a 2-column `.today-grid`. Fixed order top to bottom; **omit any
 section that has no items entirely**:
 
-1. **green** (`.big.done`) = **ready to close** — the record still reads open,
+1. **teal** (`.big.ready`) = **ready to close** — the record still reads open,
    but the source says it is done: `verifyStatus` is `resolved`, or `itemMeta`
    carries a `markMetDraft`. Label the group "Ready to close (confirm)" and put
    the draft's `reason` in the card body. See below.
@@ -113,8 +113,12 @@ believing the counts. It must never fall into "your move."
   is the only thing standing between a correct ledger and silent drift. If it
   is non-empty for more than a couple of runs, say so in `{{BOARD_NOTE}}`.
 
-States 1 and 4 share the `.big.done` variant (the template has no fifth colour);
-their **group labels** disambiguate them, so always emit the label.
+States 1 and 4 are both "nothing left to do here," but they are not the same
+state: done-today is finished, ready-to-close is still waiting on the user's
+confirmation. They shared `.big.done` originally, with only the group labels to
+tell them apart, and at a glance the board read as more finished than it was.
+Ready to close now has its own `.big.ready` teal variant. Still always emit the
+group label.
 
 Within a section, sort **flagged items first** (those carrying the orange
 `c-flag` chip). **orange** stays the `c-flag` chip, added **only when a real flag

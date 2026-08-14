@@ -232,9 +232,9 @@ def action_text(promise, state, config):
 # HTML emission
 # --------------------------------------------------------------------------
 
-CARD_VARIANT = {"ready": " done", "move": "", "waiting": " waiting", "done": " done", "upcoming": ""}
+CARD_VARIANT = {"ready": " ready", "move": "", "waiting": " waiting", "done": " done", "upcoming": ""}
 GROUP_META = [
-    ("ready", "Ready to close (confirm)", "var(--good)"),
+    ("ready", "Ready to close (confirm)", "var(--ready)"),
     ("move", "Your move", "var(--accent)"),
     ("waiting", "Waiting, no clear action", "var(--wait)"),
     ("done", "Done today", "var(--good)"),
