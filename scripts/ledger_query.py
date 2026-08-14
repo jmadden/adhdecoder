@@ -308,7 +308,6 @@ def read_notes(config):
                 # `_liveWarning` handling in query() - a live check always wins)
                 "frontmatterWarning": live_warning,
                 "_liveWarning": live_warning,
-                "_frontmatterDate": frontmatter.get("dateModified"),
                 "_origin": "note",
                 "_noteStatus": note_status,
             }
@@ -522,7 +521,6 @@ def query(config, now):
         record["_origin"] = "state"
         record.setdefault("_noteStatus", None)
         record.setdefault("_liveWarning", None)
-        record.setdefault("_frontmatterDate", None)
         state_promises.append(record)
 
     records, collapsed = union(notes, state_promises)
@@ -543,29 +541,17 @@ def query(config, now):
         if isinstance(meta.get("source"), dict) and meta["source"].get("url"):
             promise["source"] = meta["source"]
 
-        # frontmatterWarning is handled separately from the blind overlay above,
-        # on purpose: it is a claim about the note's CURRENT content, so a stored
-        # copy is only trustworthy if the note has not been touched since it was
-        # recorded. Without this, a fixed note keeps showing a warning forever -
-        # exactly the write-once-stale bug schemaVersion 2 removed `parseError`
-        # for, reintroduced through this field instead. A live check (this read,
-        # this file) always wins over a stored one for whatever it can verify.
-        live_warning = promise.pop("_liveWarning", None)
-        frontmatter_date = promise.pop("_frontmatterDate", None)
-        stored_warning = meta.get("frontmatterWarning")
-        stored_at = meta.get("lastVerified")
-        stored_is_current = bool(
-            stored_warning
-            and (not frontmatter_date or not stored_at or frontmatter_date <= stored_at)
-        )
-        if live_warning and stored_is_current and stored_warning != live_warning:
-            promise["frontmatterWarning"] = "%s; %s" % (live_warning, stored_warning)
-        elif live_warning:
-            promise["frontmatterWarning"] = live_warning
-        elif stored_is_current:
-            promise["frontmatterWarning"] = stored_warning
-        else:
-            promise["frontmatterWarning"] = None
+        # frontmatterWarning is ALWAYS the live check on this read of this file,
+        # and a stored `itemMeta.frontmatterWarning` is ignored (the field is
+        # deprecated in `ledger_schema.py`). A stored lint is a claim about the
+        # note's content with no way to re-check it, so it outlives the note it
+        # described - the write-once-stale bug `parseError` was deprecated for,
+        # reintroduced through this field. Gating it on a timestamp did not save
+        # it: the gate borrowed `lastVerified`, which unrelated verify writes
+        # bump, so a verify 16 seconds after a note was FIXED carried a
+        # days-old warning forward as current. And nothing ever wrote the field
+        # from code, so the stored half was a rule with no writer.
+        promise["frontmatterWarning"] = promise.pop("_liveWarning", None)
         promise["_dismissed"] = (
             promise["id"] in dismissed_ids or bool(meta.get("dismissedFromBoard"))
         )

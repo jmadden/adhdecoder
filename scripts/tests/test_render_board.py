@@ -281,14 +281,15 @@ def main():
             "promise.relatedRefs renders beside the source link",
         )
         check(
-            "2 records carry a frontmatter warning:" in html
-            and "Follow up with Beta Co on the SSO answer.md" in html
-            and "Draft the Xi migration summary.md" in html,
-            "both an itemMeta warning and a structural duplicate-key warning reach "
-            "the board note",
+            "1 record carries a frontmatter warning:" in html
+            and "Draft the Xi migration summary.md" in html
+            and "Follow up with Beta Co on the SSO answer.md" not in html,
+            "a live lint (the duplicate key) reaches the board note, and the two "
+            "fixture notes carrying only a STORED itemMeta warning do not - a "
+            "stored lint is never re-checked, so it is not rendered at all",
         )
         check(
-            "frontmatter warning: Follow up with Beta Co" in stdout,
+            "frontmatter warning: Draft the Xi migration summary" in stdout,
             "the recap names the frontmatter warning too",
         )
 

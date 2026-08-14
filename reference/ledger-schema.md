@@ -107,30 +107,32 @@ work as open.
   like the system losing a deadline. The board renders it on the card for any
   item whose date is soft.
 - **frontmatterWarning** — a lint on a record that **parsed**: a non-canonical
-  value, or a field contradicting the title. Surfaced in the board note beside
-  parse failures. Distinct from a parse *failure*, which makes a record
-  invisible and is detected live on every read, never stored.
+  value, a duplicate key. Surfaced in the board note beside parse failures.
+  Distinct from a parse *failure*, which makes a record invisible.
 
-  Two sources, two rules:
-  - **Anything mechanically checkable** (duplicate frontmatter keys, a
-    non-canonical `priority`) is recomputed **live on every read** in
-    `scripts/ledger_query.py`, never trusted from storage even if a stale copy
-    is present. This is what makes it self-healing: fix the note, the warning
-    is gone next read, no reconcile pass or itemMeta write required.
-  - **Anything only a human or `reconcile` can judge** (a title contradicting
-    the `customer` field) may be written here as a one-time finding. It is
-    subject to a **staleness check**: if the note's `dateModified` is newer
-    than this field's `lastVerified`, the note has been touched since the
-    finding was recorded and the stored warning is dropped rather than shown
-    with no way to know if it still holds.
+  **One rule: it is computed live on every read, and never stored.**
+  `live_frontmatter_warnings()` in `scripts/ledger_query.py` re-derives it from
+  the note in front of it, so fixing the note clears the warning on the next
+  read with no reconcile pass and no write. Adding a check there is the only way
+  to add a lint. A stored `itemMeta.frontmatterWarning` is **deprecated** and
+  ignored on read; `doctor` reports any left in a live state file.
 
-  This distinction exists because a stored `frontmatterWarning` silently
+  Storing one was tried twice and failed twice. First ungated, where it simply
   outlived the note it described: a run recorded "priority: normal is not
   canonical," the user fixed the note days later, and the warning kept showing
-  on every subsequent board because nothing ever re-checked it. It is the exact
-  write-once-stale bug `parseError` was deprecated for, reintroduced through
-  this field. Moving the mechanical half to live detection and gating the
-  judged half on `dateModified` closes both paths.
+  because nothing re-checked it — the write-once-stale bug `parseError` was
+  deprecated for. Then gated on "is the note's `dateModified` newer than this
+  finding?", which failed because the finding had no timestamp of its own and
+  borrowed `lastVerified`. Any unrelated verify write bumps that, so a verify 16
+  seconds after a note was **fixed** re-validated a days-old warning and the
+  board asserted a contradiction the user could see with their own eyes.
+
+  The deeper reason it cannot work: a stored lint is a claim about content that
+  has since changed, with no way to re-check it. A timestamp says when the claim
+  was made, never whether it still holds. And in practice nothing in the
+  codebase ever wrote the field — every instance in the wild was hand-written by
+  a session, which is why no writer needed removing, only the reader. If a lint
+  is worth showing, it is worth being checkable; make it a live check.
 - **dismissedFromBoard** — per-item form of the top-level list; see above.
 
 Invariant: **no overlay field is write-only.** If a run can write a field here,

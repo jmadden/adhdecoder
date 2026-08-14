@@ -34,7 +34,7 @@ PROMISE = {
 ITEM_META = {
     "snoozedUntil", "deadlineType", "deadlineTypeReason", "verifyStatus",
     "verifyReason", "lastVerified", "source", "noteOnly", "dismissedFromBoard",
-    "frontmatterWarning", "markMetDraft", "updateDraft", "appliedMarkMet",
+    "markMetDraft", "updateDraft", "appliedMarkMet",
 }
 
 # --- deprecated: recognised, reported as a note, never written again ------
@@ -48,6 +48,7 @@ DEPRECATED = {
         "closedBy": "appliedMarkMet.by",
         "recommendation": "updateDraft",
         "parseError": "nothing; parse failures are detected live, never stored",
+        "frontmatterWarning": "nothing; lints are detected live, never stored",
     },
 }
 

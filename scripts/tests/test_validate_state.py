@@ -86,7 +86,7 @@ def main():
         # collides with the `note` field name
         flagged = {f["key"] for f in as_json["gaps"] + as_json["notes"]}
         for survivor in ("people", "sweepLog", "suppressed", "relatedRefs", "note",
-                         "deadlineTypeReason", "frontmatterWarning", "dismissedFromBoard",
+                         "deadlineTypeReason", "dismissedFromBoard",
                          "completedDate", "promotedTo"):
             check(
                 survivor not in flagged,
@@ -102,8 +102,18 @@ def main():
             "--json lists exactly the unknown keys as gaps",
         )
         check(
-            {f["key"] for f in as_json["notes"]} == {"createdAt", "resolvedNotDropped"},
+            {f["key"] for f in as_json["notes"]}
+            == {"createdAt", "resolvedNotDropped", "frontmatterWarning"},
             "--json lists exactly the fixture's deprecated keys as notes",
+        )
+        check(
+            any(
+                f["key"] == "frontmatterWarning" and "detected live" in f.get("message", "")
+                for f in as_json["notes"]
+            ),
+            "a stored frontmatterWarning is reported as deprecated, so a user "
+            "carrying one in live state is told rather than left with a lint "
+            "that reads current and is never re-checked",
         )
 
         # --- suppressed / sweepLog structural checks -----------------------

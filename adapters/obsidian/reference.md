@@ -116,8 +116,10 @@ note that fails to parse, wearing a clean result.
 `scripts/ledger_query.py` scans the raw frontmatter block for repeated
 top-level keys before handing it to the parser (afterwards the evidence is
 gone) and attaches a `frontmatterWarning`. It is a lint, not a failure: the note
-still parses and still appears. Report it, never repair it, and never let an
-`itemMeta` warning overwrite it - both can be true about the same note.
+still parses and still appears. Report it, never repair it. The warning is
+always this read of this file - a stored `itemMeta.frontmatterWarning` is
+deprecated and ignored, because a lint nobody can re-check outlives the note it
+described (see `reference/ledger-schema.md`).
 
 **No-due staleness fallback (fix, 2026-07-27).** On real data ~60% of open
 notes have no `due` date, many of them blocked / high-priority (the

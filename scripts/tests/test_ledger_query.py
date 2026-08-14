@@ -191,7 +191,7 @@ def main():
             "parse failures ride along with every query",
         )
         check(
-            "Follow up with Beta Co on the SSO answer.md"
+            "Draft the Xi migration summary.md"
             in {w["file"] for w in payload["frontmatterWarnings"]},
             "frontmatter warnings ride along with every query",
         )
@@ -200,19 +200,24 @@ def main():
             "cross-store collapses ride along with every query",
         )
 
-        # --- a stored frontmatterWarning must not outlive the note it describes
+        # --- a stored frontmatterWarning is ignored outright ---------------
+        # both fixture entries carry one; neither note has anything wrong with it
+        # now. A lint is a claim about the note's CURRENT content, so it is only
+        # ever the live check. The stored field is deprecated: it had no writer in
+        # code, and the timestamp gate that was supposed to expire it borrowed
+        # `lastVerified`, which unrelated verify writes bump - so a verify seconds
+        # after a note was FIXED carried a days-old warning forward as current.
         warned_files = {w["file"] for w in payload["frontmatterWarnings"]}
         check(
             "Configure the Zeta test tenant.md" not in warned_files,
-            "a stored itemMeta.frontmatterWarning recorded BEFORE the note's "
-            "current dateModified is treated as stale and dropped, never shown "
-            "forever (this is the exact bug: a fixed note kept showing a "
-            "priority warning because nothing ever re-checked it)",
+            "a stored itemMeta.frontmatterWarning recorded before the note's "
+            "dateModified is not shown",
         )
         check(
-            "Follow up with Beta Co on the SSO answer.md" in warned_files,
-            "a stored warning recorded AFTER the note's dateModified (nothing "
-            "changed since) still shows - staleness cuts one way only",
+            "Follow up with Beta Co on the SSO answer.md" not in warned_files,
+            "a stored itemMeta.frontmatterWarning recorded AFTER the note's "
+            "dateModified is ALSO not shown - a fresh timestamp on a stored lint "
+            "proves nothing about whether the lint still holds",
         )
 
         # --- a duplicate key parses cleanly but must not pass silently -----
