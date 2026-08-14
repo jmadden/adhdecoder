@@ -315,6 +315,29 @@ def main():
             "verified after the last real edit, and the project is still quiet)",
         )
 
+        # --- --project filters on the rollup's member list -------------------
+        # `ISSUE-321:kappa-handover` is pinned into `epsilon` AND matches
+        # `kappa`'s alias. Only one project can stamp it, so a filter keyed on
+        # that stamp would return nothing for the other - while that project's
+        # card visibly lists the member. Both must find it.
+        for project_id in ("epsilon", "kappa"):
+            members = q(config_path, "all", ["--project", project_id])
+            check(
+                "ISSUE-321:kappa-handover" in {p["id"] for p in members["promises"]},
+                "--project %s returns a member it shares with another project"
+                % project_id,
+            )
+        unknown = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(config_path), "--now", NOW,
+             "--select", "all", "--project", "no-such-project", "--json"],
+            capture_output=True, text=True,
+        )
+        check(
+            unknown.returncode != 0 and "unknown project" in unknown.stderr,
+            "--project with an undeclared id fails loudly rather than returning "
+            "an empty list that reads as 'this project has no work'",
+        )
+
         # the two off-switches, checked on a mutated copy rather than by adding
         # more permanent fixture permutations
         probe = tmp / "probe"

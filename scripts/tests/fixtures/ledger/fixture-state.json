@@ -276,6 +276,16 @@
       ],
       "include": [],
       "updated": "2026-08-01T09:00:00-07:00"
+    },
+    {
+      "id": "kappa",
+      "name": "Kappa handover",
+      "status": "active",
+      "aliases": [
+        "Kappa Trust"
+      ],
+      "include": [],
+      "updated": "2026-08-01T09:00:00-07:00"
     }
   ]
 }

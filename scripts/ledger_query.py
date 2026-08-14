@@ -1145,8 +1145,18 @@ def main(argv=None):
 
     chosen = select(promises, args.select)
     if args.project:
-        wanted = str(args.project).strip()
-        chosen = [p for p in chosen if p.get("_projectId") == wanted]
+        # filter on the rollup's OWN member list, not on `_projectId`. A promise
+        # pinned into one project while matching another's alias is stamped with
+        # only one of them (first by id), so filtering on the stamp would return
+        # nothing for a project whose card visibly lists that member.
+        declared = {r.get("id"): r for r in meta["projects"]}
+        if args.project not in declared:
+            raise SystemExit(
+                "unknown project %r; declared: %s"
+                % (args.project, ", ".join(sorted(str(k) for k in declared)) or "none")
+            )
+        members = set(declared[args.project]["rollup"]["memberIds"])
+        chosen = [p for p in chosen if p.get("id") in members]
     if args.context:
         wanted = canonical(args.context)
         chosen = [p for p in chosen if canonical(p.get("context")) == wanted]
