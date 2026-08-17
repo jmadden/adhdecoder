@@ -221,8 +221,24 @@ never the specific ids or rosters.
 Edits to skills/reference do NOT take effect in an installed instance until:
 
 1. Bump `.claude-plugin/plugin.json` version (the cache is version-keyed; same
-   version = stale cache served).
-2. Reinstall from the **local path**, not the GitHub marketplace (the
-   GitHub-backed marketplace clone can lag): `/plugin marketplace remove
-adhdecoder` → `/plugin marketplace add <repo path>` → `/plugin install
-adhdecoder@adhdecoder` → `/reload-plugins`.
+   version = stale cache served, so an unbumped change is invisible no matter
+   what else you do).
+2. **Push.** The install resolves through a marketplace, not this working tree.
+   An unpushed commit ships to nobody, including yourself.
+3. **Refresh the marketplace, then reload:** `/plugin marketplace update
+adhdecoder` → `/reload-plugins`. Installing already refreshes the marketplace
+   first, so a separate reinstall is not needed; `/plugin update
+adhdecoder@adhdecoder` also works if the plugin is already installed.
+
+A GitHub-backed marketplace is a **git clone** under
+`~/.claude/plugins/marketplaces/<name>`, and third-party marketplaces have
+auto-update **off by default** - so it only pulls when told to. That is the usual
+reason a pushed change appears not to have shipped: check the clone's HEAD before
+concluding anything about the code. `"autoUpdate": true` on the marketplace's
+`extraKnownMarketplaces` entry makes it keep itself current.
+
+**Do not "fix" a stale clone by reinstalling from a local path.** That was the
+advice here for a while and it is wrong: it swaps a one-command refresh for a
+four-command teardown, and it silently changes what the user is running from
+"what is on GitHub" to "whatever is in one working tree". A local-path
+marketplace is for dev-looping without pushing, and nothing else.
