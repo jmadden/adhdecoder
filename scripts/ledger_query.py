@@ -935,7 +935,13 @@ def select(promises, selector):
         return [
             p for p in active
             if p["_open"] and not p["_readyToClose"] and not p["_driftCleared"]
-            and (p["_stale"] or (p["stakes"] == "high" and (p["_overdue"] or p["_dueSoon"])))
+            # `.get`, not `[...]`: `stakes` is OPTIONAL in the schema, so a record
+            # without it is legal and `doctor` reports it clean. A hard subscript
+            # here crashed `--select drifting` on a real ledger the moment one
+            # such record arrived - taking down the whole drift skill for every
+            # other item, from one absent key on one promise. Absent reads as
+            # not-high, which is how every other reader treats it.
+            and (p["_stale"] or (p.get("stakes") == "high" and (p["_overdue"] or p["_dueSoon"])))
         ]
     if selector == "waiting":
         return [p for p in active if p["_open"] and p["direction"] == "they-owe-me"]

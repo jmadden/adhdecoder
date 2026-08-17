@@ -22,6 +22,10 @@ REPO = HERE.parent.parent
 SCRIPT = REPO / "scripts" / "ledger_query.py"
 FIXTURES = HERE / "fixtures"
 NOW = "2026-08-12T09:15:00"
+SELECTORS = (
+    "all", "open", "closed", "ready-to-close", "slipping", "drifting",
+    "waiting", "owed", "upcoming", "snoozed",
+)
 
 FAILURES = []
 
@@ -191,6 +195,25 @@ def main():
             "Wait on Upsilon Bank for the vendor contact" in drifting,
             "a blocked item DOES eventually drift once untouched >= 10 business "
             "days - the fix is patience, not silence forever",
+        )
+
+        # --- an ABSENT optional field must not take a selector down ---------
+        # `stakes` is optional in the schema, so a record without it is legal and
+        # `doctor` calls it clean. `drifting` subscripted it directly, so the
+        # first such record crashed the selector outright - killing the whole
+        # drift skill for every other item, from one missing key on one promise.
+        # Every fixture promise happened to carry `stakes`, which is why the
+        # suite passed while a real ledger was broken.
+        for selector in SELECTORS:
+            payload = q(config_path, selector)
+            check(
+                isinstance(payload.get("promises"), list),
+                "selector %r survives a promise with no `stakes` key" % selector,
+            )
+        check(
+            "Exercise a record whose optional `stakes` field is simply absent"
+            in whats(q(config_path, "open")),
+            "and that record is still served, not quietly dropped",
         )
 
         # --- ready-to-close matches the board's rule -----------------------
