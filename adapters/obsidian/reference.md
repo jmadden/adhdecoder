@@ -214,6 +214,23 @@ delete; TaskNotes-canonical fields only - `snoozedUntil`, `deadlineType`
 override, verify metadata, enriched source links STAY in the `itemMeta`
 companion even in readwrite.
 
+**`projects` as wikilinks (fix, 2026-08-17).** `scripts/ledger_write.py`'s
+`capture` and `promote` write whatever string `--project` is given straight
+into the note's `projects:` list - they are store-agnostic and correctly do
+not know that `[[...]]` means anything. Obsidian's backlink graph is what
+gives that syntax meaning, so **when this adapter is active, pass the
+Obsidian-linked form**: look up the project's declared `name` in
+`state.json.projects[]` and call `--project "[[<name>]]"` (e.g.
+`--project "[[Integration Docs]]"`), not the bare `id`
+(`integration-docs`) - a bare id round-trips fine through the ledger (the
+Query matches on it either way) but renders as dead text in the vault instead
+of a backlink. If the id does not resolve to any declared project, pass it
+through unchanged rather than guessing a name. This is a judgment call for
+whichever skill invokes `capture`/`promote`, not a rule to push into the
+generic write path: a `builtin`-backend note store (or a future non-Obsidian
+adapter) has no use for the brackets, and baking vault syntax into the shared
+script would wrongly assume every note-writing user is on Obsidian.
+
 ## Interface (why the other skills don't change)
 
 Implement the ledger's read/Query operations against the notes so `chase-in`,
