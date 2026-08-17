@@ -33,6 +33,8 @@ auto-sends.
 
 **The command cheat-sheet:**
 
+- "add a task" / "remind me to X" / "I need to X" -> ledger (writes a real task
+  note; no due date needed)
 - "what's slipping" / "who do I chase" -> chase-in
 - "what's drifting / gone quiet" -> drift
 - "panic" / "I'm overwhelmed" -> panic

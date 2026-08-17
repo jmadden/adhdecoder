@@ -37,6 +37,7 @@ Each capability is a skill; together they close the follow-up loop:
 |    | Skill             | What it does                                              |
 | -- | ----------------- | --------------------------------------------------------- |
 | 📓 | **ledger**        | the promise store: who owes what, by when, which direction |
+| ➕ | **ledger**        | the promise store; also "add a task" -> a real task note    |
 | ⏱️ | **set-the-clock** | captures a promise the moment work flows in or out         |
 | 📣 | **chase-in**      | surfaces slips as tiered, ready-to-send nudges             |
 | 🛰️ | **radiate-out**   | publishes status so people stop chasing *you*              |
@@ -151,6 +152,7 @@ time, or synced state can conflict).
 - "where do things stand for \<context>" → **radiate-out**
 - "show my board" / "refresh the dashboard" → **board**
 - "is this still open / reconcile this" → **reconcile**
+- "add a task" / "remind me to \<X>" → **ledger** (a real task note, no due date needed)
 - "\<someone> owes me \<X> by \<date>" / replying to an ask → **set-the-clock**
 - "run a sweep" / "daily run" → **sweep** / **daily-run**
 - "help" / "set me up" / "check my setup" → **help** / **setup** / **doctor**

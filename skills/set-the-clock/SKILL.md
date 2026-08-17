@@ -55,9 +55,22 @@ When it fires: one small prompt, not a nag — "Want to set the clock on this? W
 owes what back, by when?" If the user declines or it is not a real promise, drop
 it; do not re-prompt the same thread.
 
+## First: is this even a promise?
+
+**A task the user is giving themselves is not a promise, and the gate below does
+not apply to it.** "add a task", "remind me to", "I need to" - there is no
+counterparty, nothing is owed back, and nobody is waiting. Route it to the
+`ledger` skill's **capture**, which writes it immediately and requires neither an
+owner nor a date.
+
+Getting this wrong is worse than doing nothing: the gate below would interrogate
+someone for an owner and a deadline that do not exist, and then refuse to record a
+task they simply wanted written down. Check for a counterparty before reading on.
+
 ## Reality gate (before anything is written)
 
-Write a promise ONLY with all three: a named **owner**, a concrete **what** (one
+Applies to a **promise between two people** - something owed, in one direction or
+the other. Write one ONLY with all three: a named **owner**, a concrete **what** (one
 deliverable, not "an update"), and an **expectBy** date — OR the user's explicit
 confirmation to log it. If any is missing:
 

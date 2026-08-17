@@ -1,12 +1,15 @@
 ---
 name: ledger
 description: >
-  Read, write, and query the ADHDecoder promise ledger (state.json in the
-  instance layer). Use when the user says things like "what am I waiting on",
-  "who owes me", "what do I owe", "add a promise", "log that <person> owes me
-  <thing> by <date>", "I told <person> I'd deliver <thing> by <date>", "mark
-  this met / done", "what's overdue", or "show my chases". This is Phase 1 of
-  ADHDecoder: the promise store only. It does not sweep sources or send anything.
+  Add a task, and read/write/query the ADHDecoder promise ledger. Use when the
+  user says things like "add a task", "remind me to <do X>", "I need to <do X>",
+  "put this on my list", "capture this", "add a task to <do X> by <date>" - each
+  of which creates a real task note where they work - and also "what am I waiting
+  on", "who owes me", "what do I owe", "add a promise", "log that <person> owes me
+  <thing> by <date>", "I told <person> I'd deliver <thing> by <date>", "mark this
+  met / done", "what's overdue", or "show my chases". Adding a task needs no due
+  date and no counterparty: it is written immediately, not interrogated. Phase 1
+  of ADHDecoder. It does not sweep sources and never sends anything.
 ---
 
 # Ledger (Phase 1)
@@ -26,8 +29,13 @@ record shape before writing.
    `reference/ledger-backend-interface.md`: read/Query are served by the
    adapter either way; writes go to the adapter only when it is writable,
    otherwise they stay on the builtin `state.json` companion and become drafts.
-1. Read the instance `config.json` (its path is the configured `instancePath`,
-   or ask the user once and remember it). **First-run gate:** if `config.json`
+1. Read the instance `config.json`. To find it, in this order: a path already
+   in the session's own context (the user's `CLAUDE.md` may name their instance
+   directory - check before asking); then a `_decoder/config.json` under their
+   knowledge vault; then ask, once, and reuse the answer for the rest of the
+   conversation. Do NOT say "its path is `instancePath`" and stop - that value
+   lives inside the file being looked for, so it cannot help you find it.
+   **First-run gate:** if `config.json`
    is absent or unparseable, do not invent paths - route to `setup`
    ("ADHDecoder isn't set up yet - want to run setup?"). Read-side skills inherit
    this through Query. See `reference/onboarding.md`.
@@ -38,15 +46,20 @@ record shape before writing.
 
 ## Operations
 
+`<plugin-root>` below is the directory holding this skill's own `skills/` parent
+(in an installed instance, the version-keyed plugin cache directory; in a
+checkout, the repo root). Resolve it from this file's path rather than hardcoding
+either.
+
 **Never hand-write `state.json` or a note.** Every operation below runs through
 `scripts/ledger_write.py`, which enforces the reality gate and the schema, dedups
 against the full union (notes included), keeps history append-only, writes
 atomically with a backup, and refuses if another session wrote meanwhile.
 
-**Capture a task (note backend, the common case).** When the user says "add a
-task", "remind me to…", "I need to…" and the backend is note-backed, put it where
-they actually work - a real note - rather than in `state.json` where it is
-invisible to them:
+**Add a task (the most common thing a user asks for).** "add a task", "remind me
+to...", "I need to...", "put this on my list". On a note-backed backend this
+creates a real note where they actually work, rather than a `state.json` record
+they will never see:
 
 ```
 python3 <plugin-root>/scripts/ledger_write.py --config <cfg> capture --confirmed \
@@ -55,12 +68,29 @@ python3 <plugin-root>/scripts/ledger_write.py --config <cfg> capture --confirmed
     [--source-url <link>]
 ```
 
+**Write it, then report one line.** Do not preview it, do not ask for approval,
+do not ask about a deadline or who it is for. "On the fly" means one turn: the
+title, where it landed, and - when there is no date - that drift will surface it.
+Everything about the task is optional except the title, so infer what the user
+already said and stop there. If they mention a date or a person, use it; if they
+do not, that is the answer, not a gap to fill.
+
 **No `--due` is required, and that is not a loophole.** The reality gate governs
 `state.json` promises, which must be chaseable. A note legitimately has no due
-date - most real ones do not - and drift staleness surfaces those instead. Do not
-interrogate the user for a deadline they do not have; ask only if they imply one.
+date - most real ones do not - and drift staleness surfaces those instead. Never
+manufacture a deadline to satisfy a gate that does not apply here.
+
 `--title` is a headline: it becomes the filename and the promise id, so a
-paragraph is refused. Put the detail in `--summary`.
+paragraph is refused (120 chars). Put the detail in `--summary`.
+
+**If the title already exists**, capture refuses rather than overwriting - which
+is correct, but say something useful: name the existing note, and offer either to
+log an update against it (`enrich`) or to use a more specific title. Never
+silently pick a variant title on the user's behalf.
+
+`--dry-run` is a GLOBAL flag and belongs before the operation
+(`--config <cfg> --dry-run capture ...`). A quick capture does not need it; it is
+there for `promote`.
 
 **Add a `state.json` promise.** For something that should NOT become a note -
 typically a sweep-found `they-owe-me` stall - use `add` instead, which does

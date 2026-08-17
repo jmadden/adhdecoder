@@ -20,6 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 SCRIPT = REPO / "scripts" / "ledger_write.py"
+QUERY = REPO / "scripts" / "ledger_query.py"
 FIXTURES = HERE / "fixtures"
 NOW = "2026-08-14T09:00:00"
 
@@ -338,6 +339,70 @@ def main():
         text = created.read_text(encoding="utf-8")
         check("tags:\n  - task" in text, "the note carries the `task` tag, so it is enumerable")
         check("> **Summary:** Pull numbers" in text, "the summary lands in the body")
+
+        # --- capture round-trip: the Query must READ BACK what capture wrote ---
+        # Writing a well-formed note is only half the job. Every check above can
+        # pass while the note never reaches a surface - which is exactly how a
+        # capture feature ships, looks correct, and leaves the user's task
+        # invisible on their own board. So ask the real read path for it.
+        read_back = subprocess.run(
+            [sys.executable, str(QUERY), "--config", str(rw_config), "--now", NOW,
+             "--select", "open", "--json"],
+            capture_output=True, text=True)
+        found = []
+        if read_back.returncode == 0:
+            payload = json.loads(read_back.stdout)
+            found = [
+                pr for pr in payload["promises"]
+                if (pr.get("what") or pr.get("title")) == "Draft the rollout summary"
+            ]
+        check(
+            read_back.returncode == 0 and len(found) == 1,
+            "a captured note comes back from the Query as ONE open promise - the "
+            "round trip, without which capture can pass every write check and "
+            "still never appear on the board",
+        )
+        check(
+            bool(found) and found[0]["context"] == "Acme Corp"
+            and found[0]["direction"] == "i-owe-them",
+            "and it carries the customer through as its context, owed by the user",
+        )
+        check(
+            bool(found) and found[0]["derived"]["open"]
+            and not found[0]["derived"]["overdue"],
+            "a dateless capture reads open and is never overdue - it waits for "
+            "drift staleness rather than firing a false chase",
+        )
+
+        # --- every flag reaches the frontmatter (previously untested) ----------
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
+             "capture", "--confirmed", "--title", "Ship the Delta handover",
+             "--due", "2026-08-18", "--priority", "high", "--requester", "R. Contact",
+             "--project", "[[Delta]]"],
+            capture_output=True, text=True)
+        flagged = (vault_tasks / "Ship the Delta handover.md")
+        flag_text = flagged.read_text(encoding="utf-8") if flagged.is_file() else ""
+        check(
+            result.returncode == 0
+            and "due: 2026-08-18" in flag_text
+            and "priority: high" in flag_text
+            and "- R. Contact" in flag_text
+            and "- \"[[Delta]]\"" in flag_text,
+            "--due / --priority / --requester / --project each reach the note's "
+            "frontmatter, in the canonical field shapes",
+        )
+        dated = subprocess.run(
+            [sys.executable, str(QUERY), "--config", str(rw_config), "--now", NOW,
+             "--select", "upcoming", "--json"],
+            capture_output=True, text=True)
+        check(
+            dated.returncode == 0
+            and "Ship the Delta handover" in
+            {p.get("what") or p.get("title") for p in json.loads(dated.stdout)["promises"]},
+            "and a captured task WITH a due date lands in `upcoming`, so the date "
+            "the user gave is actually honoured by the read side",
+        )
 
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--config", str(rw_config), "--now", NOW,
