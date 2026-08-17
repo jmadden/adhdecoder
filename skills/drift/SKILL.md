@@ -91,9 +91,20 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 1. `status` is `pending`, and `expectBy` is absent.
 2. `driftClearedUntil` is null or in the past, the id is not in
    `dismissedFromBoard`, and `snoozedUntil` is null or in the past.
-3. Compute days since `lastVerified` in **business days** (exclude weekends;
-   a backend adapter supplies `lastVerified` - e.g. the note-backed adapter uses
-   `dateModified` - this skill does the business-day math).
+3. Compute days since the item was last **touched by a human** in business days
+   (weekends excluded). "Touched" is a close, an edit to the backing note, a
+   logged update, or the item arriving - the Query derives it as
+   `derived.lastTouched` and does the business-day math.
+
+   **NOT since `lastVerified`.** That records when the system last LOOKED, and a
+   sweep refreshes it on everything it sees, so measuring from it makes the
+   automated pass meant to catch a stalled item the very thing certifying it as
+   fresh. It shipped that way and it hid real rot: on a live ledger, three undated
+   items untouched for 9, 10 and 24 business days each reported **0 days stale**
+   and drift stayed silent for all of them. A verify verdict is about whether an
+   item is still OPEN; it is not evidence anyone is working on it. Quote
+   `derived.staleDays`, and if the user asks why, `derived.lastTouched` is the
+   date it is measured from.
 4. Surface when the Query says so. The thresholds live in
    `scripts/ledger_query.py` (`STALE_DAYS_HIGH` / `STALE_DAYS_ANY` /
    `STALE_DAYS_BLOCKED`) and `--select drifting` applies them. Do not restate the

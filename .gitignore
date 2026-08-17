@@ -20,3 +20,8 @@ __pycache__/
 
 # browser-tool artifacts: a screenshot of a real board is instance data
 .playwright-mcp/
+
+# working-session scratch files: an ISSUE-*.md in the root is a draft for one
+# change, not repo content. They name real observations and are easy to sweep in
+# with `git add -A`.
+/ISSUE-*.md

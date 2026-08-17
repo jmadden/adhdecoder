@@ -196,6 +196,25 @@ def main():
             "a blocked item DOES eventually drift once untouched >= 10 business "
             "days - the fix is patience, not silence forever",
         )
+        # ...and that item now carries a verify from YESTERDAY. Staleness measures
+        # when a human last moved something, not when the system last looked: a
+        # sweep refreshes `lastVerified` on everything it sees, so measuring from
+        # it means the pass meant to catch a stalled item is what certifies it as
+        # fresh. Measured on a real ledger, three undated items untouched for 9,
+        # 10 and 24 business days every one reported 0 days stale.
+        upsilon = [
+            p for p in q(config_path, "all")["promises"]
+            if "Upsilon Bank" in str(p.get("what") or p.get("title"))
+        ]
+        check(
+            len(upsilon) == 1
+            and str(upsilon[0].get("lastVerified") or "").startswith("2026-08-11")
+            and upsilon[0]["derived"]["staleDays"] >= 10
+            and upsilon[0]["derived"]["lastTouched"] == "2026-07-24",
+            "a FRESH verify does not reset staleness - the item was verified "
+            "yesterday and is still correctly 13 business days untouched, dated "
+            "from the last human edit",
+        )
 
         # --- an ABSENT optional field must not take a selector down ---------
         # `stakes` is optional in the schema, so a record without it is legal and

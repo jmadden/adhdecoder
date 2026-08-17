@@ -468,8 +468,12 @@ def decorate(promise, now):
     snoozed_until = as_date(promise.get("snoozedUntil"))
     promise["_snoozed"] = bool(snoozed_until and snoozed_until > today)
 
-    last_verified = as_date(promise.get("lastVerified"))
-    promise["_staleDays"] = business_days_between(last_verified, today)
+    # staleness measures how long since a HUMAN moved this, not since the system
+    # last looked at it - see last_touched(). `lastVerified` stays on the record
+    # and is still rendered; it just no longer masquerades as health.
+    touched = last_touched(promise)
+    promise["_lastTouched"] = touched
+    promise["_staleDays"] = business_days_between(touched, today)
 
     draft = promise.get("markMetDraft") or promise.get("updateDraft")
     promise["_draft"] = draft if isinstance(draft, dict) else None
@@ -671,6 +675,39 @@ def project_members(project, promises):
     return members, reasons
 
 
+def last_touched(promise):
+    """When a HUMAN last moved this one promise, or None.
+
+    The single definition of movement in this file: a close, a note the user
+    edited, a logged update (`history` is only appended by `enrich`, which
+    requires a note), or the item arriving. `last_movement()` is this maxed over a
+    project's members - one idea, two scopes, so they cannot drift apart.
+
+    **`lastVerified` is deliberately excluded.** It records when the system last
+    LOOKED, and `record-verify` - the sweep and reconcile path - refreshes it
+    without touching anything a human would recognise as progress. Measuring
+    staleness from it means the automated pass meant to catch a stalled item is
+    the very thing certifying it as fresh: on a real ledger, three undated items
+    untouched for 9, 10 and 24 business days all reported 0 days stale, and drift
+    never fired for any of them.
+    """
+    stamps = []
+    for value in (
+        promise.get("completedDate"),
+        promise.get("created"),
+        promise.get("_noteModified"),
+    ):
+        stamp = as_date(value)
+        if stamp:
+            stamps.append(stamp)
+    for entry in promise.get("history") or []:
+        if isinstance(entry, dict):
+            stamp = as_date(entry.get("ts"))
+            if stamp:
+                stamps.append(stamp)
+    return max(stamps) if stamps else None
+
+
 def last_movement(members):
     """The most recent date anything in this project actually moved.
 
@@ -685,21 +722,8 @@ def last_movement(members):
     new item arriving (`created`) - each of which requires a human to have done
     something.
     """
-    stamps = []
-    for promise in members:
-        for value in (
-            promise.get("completedDate"),
-            promise.get("created"),
-            promise.get("_noteModified"),
-        ):
-            stamp = as_date(value)
-            if stamp:
-                stamps.append(stamp)
-        for entry in promise.get("history") or []:
-            if isinstance(entry, dict):
-                stamp = as_date(entry.get("ts"))
-                if stamp:
-                    stamps.append(stamp)
+    stamps = [last_touched(p) for p in members]
+    stamps = [s for s in stamps if s]
     return max(stamps) if stamps else None
 
 
@@ -962,7 +986,7 @@ SELECTORS = (
 DERIVED_FIELDS = (
     "open", "overdue", "dueToday", "dueSoon", "softPast", "snoozed", "staleDays",
     "stale", "driftCleared", "readyToClose", "dismissed", "suppressed", "flagged",
-    "doneToday", "pronouns", "origin", "noteStatus", "projectId",
+    "doneToday", "pronouns", "origin", "noteStatus", "projectId", "lastTouched",
 )
 
 

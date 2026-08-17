@@ -148,6 +148,11 @@ mean a swept ledger can never go quiet: the automated pass meant to notice a
 stalled project would be the very thing keeping it looking alive. Movement means
 a human did something.
 
+Per-promise staleness now uses the same rule and the same function
+(`last_touched()` in `scripts/ledger_query.py`, which `last_movement()` maxes over
+a project's members). One idea, two scopes, so a project and its members can
+never disagree about what counts as progress.
+
 In precedence order, `lag` staying a single value:
 
 - **quiet** — active, not snoozed, at least one member, `movementDays >=

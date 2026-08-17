@@ -124,8 +124,15 @@ described (see `reference/ledger-schema.md`).
 **No-due staleness fallback (fix, 2026-07-27).** On real data ~60% of open
 notes have no `due` date, many of them blocked / high-priority (the
 silent-rot zone). Date-based chasing misses all of them. So for an OPEN promise
-with no `expectBy`, drift uses a **staleness** signal instead: days since
-`lastVerified` (from `dateModified`), counted in BUSINESS days. Surface it when:
+with no `expectBy`, drift uses a **staleness** signal instead: business days
+since a human last touched the item (`derived.lastTouched`: the note's own
+`dateModified`, a logged update, or the item arriving).
+
+**Not `lastVerified`.** For a note-backed record the two are usually the same
+value, but they diverge exactly when it matters: an `itemMeta` verify overlay
+replaces `lastVerified` with the moment a sweep last looked, while the note
+itself has not changed in weeks. Measuring staleness from that made the sweep
+suppress the signal it exists to raise. Surface it when:
 
 - high-stakes (and not `blocked`) AND untouched >= ~2 business days, or
 - any other open item untouched >= ~5 business days, or
