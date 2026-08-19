@@ -249,6 +249,28 @@ def note_url_for(vault, knowledge_path, note_path):
     return "obsidian://open?vault=%s&file=%s" % (quote(vault), quote(str(rel)))
 
 
+# How a note's `status` becomes a promise status. Anything NOT named here is
+# deliberately `pending`, so an unrecognised value fails OPEN (visible) rather
+# than closed (silently dropped) - a note nobody can see is the worse bug.
+#
+# The cost of that default is the reason this map exists: `cancelled` used to be
+# unrecognised, so a note the user had deliberately called off read back as
+# pending and reappeared on the board on the next sweep. Closing something for
+# real took editing the note to `done`, which put work that was abandoned into
+# the same bucket as work that shipped, and left the record asserting a delivery
+# that never happened.
+#
+# `cleared` is the existing promise status for "closed, but not delivered"
+# (see STATUSES in ledger_schema.py); cancelled work is exactly that, so it maps
+# there rather than to `met`. Both are closed, so neither surfaces - the
+# distinction is what the record CLAIMS, and it is not cosmetic.
+NOTE_STATUS_TO_PROMISE = {
+    "done": "met",
+    "cancelled": "cleared",
+    "canceled": "cleared",  # US spelling, same meaning
+}
+
+
 def read_notes(config):
     """Enumerate tasksDir -> (promises, parse_failures). Never skips silently.
 
@@ -323,7 +345,7 @@ def read_notes(config):
                 "what": first_scalar(frontmatter.get("title")) or title,
                 "owner": owner,
                 "expectBy": due.isoformat() if due else None,
-                "status": "met" if note_status == "done" else "pending",
+                "status": NOTE_STATUS_TO_PROMISE.get(note_status, "pending"),
                 "completedDate": (
                     as_date(frontmatter.get("completedDate")).isoformat()
                     if as_date(frontmatter.get("completedDate"))

@@ -264,7 +264,7 @@ def main():
             "the Projects tab still exists and explains how to populate it",
         )
         check(
-            "<b>2</b> ready to close, <b>6</b> need your move, <b>2</b> waiting, <b>2</b> shipped"
+            "<b>2</b> ready to close, <b>6</b> need your move, <b>2</b> waiting, <b>3</b> shipped"
             in html,
             "counts split ready-to-close out of need-your-move",
         )

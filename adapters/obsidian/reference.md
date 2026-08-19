@@ -53,13 +53,26 @@ note's frontmatter + body and map to a promise via the ledger interface:
 | `direction`             | infer from the title verb: "chase / follow up / waiting on / get X from" => `they-owe-me`; "deliver / provide / send / build / answer / set up / configure" => `i-owe-them`. Default `i-owe-them` (these notes are mostly the user's own to-dos). |
 | `owner` / who's waiting | `requester` and/or `customer`                                                                                                                                                                                                                   |
 | `expectBy`              | `due` if present. If absent: the item is "open, no date" — visible but NOT a chase candidate (can't compute overdue).                                                                                                                           |
-| `status`                | `todo` / `in-progress` / `blocked` => open; `done` => closed (skip from chases; may show under "recently done"); use `completedDate`                                                                                                            |
+| `status`                | `todo` / `in-progress` / `blocked` => open; `done` => closed as `met`; `cancelled` (or `canceled`) => closed as `cleared`; use `completedDate`. Closed either way means skipped from chases. The map is `NOTE_STATUS_TO_PROMISE` in `scripts/ledger_query.py`; anything not in it defaults to open, so an unknown status fails VISIBLE rather than silently vanishing |
 | `stakes`                | `priority` (high/medium/low) plus the standard auto-signals (roster customer, go-live, etc.)                                                                                                                                                    |
 | `lastVerified`          | `dateModified`                                                                                                                                                                                                                                  |
 | `source`                | an `obsidian://` link to the file                                                                                                                                                                                                               |
 | `history`               | read the body's `update <ISO> - ...` lines (do not modify them)                                                                                                                                                                                 |
 
-Same verify spirit as the sweep: `status: done` is closed, never chase it.
+Same verify spirit as the sweep: a closed note is never chased.
+
+**`cancelled` is closed, and is not `done` (fix, 2026-08-19).** The map used to
+recognise only `done`, so a note the user had deliberately called off read back
+as `pending` and returned to the board on the next sweep. The only way to
+silence it was to edit the note to `done` - which recorded abandoned work as
+delivered, in the store that is supposed to be the truth. Both halves were bugs:
+the item that would not die, and the record that lied to kill it.
+
+So `cancelled` maps to the promise status `cleared`, which already means "closed,
+but not delivered" (`STATUSES`, `reference/ledger-schema.md`). `done` still maps
+to `met`. Both are closed and neither surfaces; the difference is what the record
+CLAIMS, which is the whole point. Everything else still defaults to open, so a
+status nobody has taught the adapter fails visible rather than disappearing.
 
 **Robust parsing (fix, 2026-07-27; revised 2026-08-13).** An empty or missing key
 (e.g. a blank `due:`) is ABSENT, never a grab of the next line's value. Confirmed

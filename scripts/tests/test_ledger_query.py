@@ -174,6 +174,35 @@ def main():
             "slipping excludes a future-dated item",
         )
 
+        # --- cancelled notes are CLOSED, and closed the honest way ---------
+        # A note the user called off must never come back. `cancelled` was once
+        # an unrecognised value, so it fell through to `pending` and the item
+        # reappeared on the next sweep; the only way to silence it was to edit
+        # the note to `done`, which recorded abandoned work as delivered.
+        opened = whats(q(config_path, "open"))
+        closed = whats(q(config_path, "closed"))
+        kappa = "Rework the Kappa folder taxonomy"
+        check(kappa not in opened, "a cancelled note is not open")
+        check(kappa in closed, "a cancelled note is closed")
+        check(
+            kappa not in slipping,
+            "a cancelled note does not slip, even though it is high-stakes and "
+            "past a hard due date - the loudest possible false chase",
+        )
+        cancelled_status = {
+            p.get("what") or p.get("title"): p.get("status")
+            for p in q(config_path, "closed")["promises"]
+        }
+        check(
+            cancelled_status.get(kappa) == "cleared",
+            "a cancelled note maps to `cleared` (closed, NOT delivered), never "
+            "to `met` - the record must not claim work that never happened",
+        )
+        check(
+            cancelled_status.get("Send the Epsilon onboarding pack") == "met",
+            "a done note still maps to `met`",
+        )
+
         # --- drifting: the dateless items date-chasing misses --------------
         drifting = whats(q(config_path, "drifting"))
         check(
