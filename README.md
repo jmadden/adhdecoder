@@ -56,6 +56,213 @@ Obsidian notes - Markdown + YAML frontmatter - instead of a fresh store; ships i
 `adapters/obsidian/`) and a schedulable **daily-run** routine that does one pass
 and leaves you a board.
 
+## Skills in depth
+
+Each skill below is a paragraph, not the spec - full detail lives in each
+`skills/<name>/SKILL.md` and the relevant `reference/*.md`.
+
+### board
+
+Renders the ledger into the multi-tab HTML dashboard (Board / Shipped /
+Waiting on Others / Tomorrow's Headlines / Projects / History). Triggered by
+"show my board", "refresh the dashboard", "open the board", "render the
+dashboard", or "regenerate my board". It calls `scripts/render-board.py`, a
+pure function of config + ledger + clock that never reconciles on its own -
+so board checks ledger freshness first (sweeping if `lastSwept` is stale) and
+reconciles any card whose `verifyStatus` is null or TTL-stale before handing
+off to the renderer. `reference/dashboard.md` explains a non-obvious fix: "done
+today" and "ready to close" originally shared one visual style distinguished
+only by a group label, and at a glance the board read as more finished than
+it actually was - so ready-to-close got its own teal variant, because a
+pending confirmation and genuinely finished work are not the same state.
+
+### chase-in
+
+Phase 3: turns slipping promises into tiered, ready-to-send nudges. Triggered
+by "who do I need to chase", "what's slipping", "what should I follow up on",
+"run my chases", "chase in", "who's overdue and what do I say", "draft a
+nudge for \<person>", or "what's falling through the cracks". It reads the
+ledger only, recomputing overdue from `expectBy` vs. today, and never sweeps
+a source directly - before drafting any nudge it hands the candidate to
+`reconcile`, its only source cross-check. Tiering is by stakes (high-stakes
+surfaces from due-soon onward; normal-stakes stays quiet until overdue), and
+a slipping promise never reappears as a new item - it moves up an escalation
+rung (friendly check-in → firmer → loop in a manager), which is the "no
+flood" principle made concrete.
+
+### daily-run
+
+The scheduled, non-interactive routine: sweep → reconcile → update the
+ledger → refresh the board → one-line recap, in a single pass. Triggered by
+"run the decoder", "daily run", "do a scheduled run", "refresh the board", or
+when wiring a cron/scheduled task. Because a scheduled run can never prompt
+for approval, it never calls `capture` or `promote` - both require
+`--confirmed`, an explicit human action - so an unattended pass can enrich
+existing promises but never create a note. It also enforces the rule that
+every enabled source is swept at least once per calendar day regardless of
+`weight` or `cadence`, closing the gap where a quiet low-priority source
+could otherwise go unswept indefinitely.
+
+### doctor
+
+A read-only health check, triggered by "check my setup", "adhdecoder
+doctor", "is this configured right", "diagnose ADHDecoder", or "why isn't
+the decoder working". It reports each check as OK or a gap with a one-line
+fix - runtime, config, backend, write mode, record-store integrity, schema,
+connector presence, suppressions/sweep results - and never repairs anything
+itself. Connector presence is deliberately reported as `unchecked` rather
+than a false "OK", because a subprocess cannot see which MCP connectors the
+running session has attached. Schema integrity exists because the schema used
+to be prose only: different runs invented different field names for "this
+note is malformed," and one of those inventions was write-only - a run
+recorded a damaged note and nothing surfaced it for weeks.
+
+### drift
+
+Flags promises that look stalled, observationally rather than accusingly.
+Triggered by "what's drifting", "what's stalled", "what have I not
+touched", or "check for drift", and internally whenever `panic` runs its
+drift check or a sweep does a quiet passive flag. It computes staleness from
+ledger dates - days since `lastVerified` for overdue/due-soon-high-stakes
+items with a real due date, plus a business-day fallback for open items with
+none - then reconciles each surfaced candidate before showing it, the same
+bounded-to-candidates discipline as chase-in. The no-due-date fallback
+measures staleness from when a human last touched the item
+(`derived.lastTouched`), not from `lastVerified` - measuring from
+`lastVerified` was tried first and hid real rot, because a sweep refreshes
+`lastVerified` on everything it looks at, so the automated pass meant to
+catch stalled work was instead certifying it as fresh; on a live ledger,
+three untouched items showed "0 days stale" under that scheme.
+
+### help
+
+Orientation for someone who just installed ADHDecoder, triggered by "what
+can ADHDecoder do", "get started with ADHDecoder", "how do I use
+ADHDecoder", "ADHDecoder help", or "what are the commands". Read-only: a
+two-line explanation of the loop-closer model (chase-in + radiate-out,
+everything a draft) plus the command cheat-sheet, leading with a pointer to
+`setup` if config is missing or thin. It's the entry point that routes
+everywhere else - not set up, point to `setup`; set up but something looks
+off, point to `doctor`.
+
+### ledger
+
+Phase 1, the promise store itself: add a task, or read/write/query
+promises. Triggered by "add a task", "remind me to \<X>", "I need to \<X>",
+"put this on my list", "capture this", "add a task to \<X> by \<date>", and
+read-side phrases like "what am I waiting on", "who owes me", "mark this
+met/done", "what's overdue". "Add a task" is the most common path - it
+writes a real note immediately, with no due date and no interrogation -
+while a sweep-found "they-owe-me" stall goes through `add`, which does
+enforce the full reality gate (named owner + concrete what + `expectBy`).
+Every write, on any backend, goes through `scripts/ledger_write.py` and
+every read through `scripts/ledger_query.py` - the single implementations
+every other skill calls rather than re-deriving overdue/stakes/staleness
+itself, because a second derivation of "overdue" is a second answer, and the
+two disagree exactly where it hurts: an overridden deadline chased as if it
+were hard, or a snoozed item resurfacing.
+
+### panic
+
+The reactive spiral-breaker, triggered by "panic", "SOS", "I'm freaking
+out", "I'm spiraling", "what's on fire", "I don't know where to start", or
+"I'm overwhelmed". It shows the top 2-3 most time-sensitive items (never the
+full board), a drift check, the one item likely being avoided (approximated
+as the most time-sensitive i-owe-them item), and one small next move - pure
+ephemeral, rendered in chat only, writing no promise data itself. It
+reconciles only the handful of items it's about to show, reusing drift's
+reconcile results within the same run so nothing is verified twice - the
+speed that makes it usable mid-spiral. The design principle stated plainly
+in its own description: it regulates, it does not aggregate; dumping the
+full ledger is the failure mode this skill exists to prevent.
+
+### projects
+
+Declares and tracks a multi-week effort that then claims matching work as it
+arrives. Triggered by "start a new project", "I'd like to track X as a
+project", "I've been assigned X", "add this to my \<name> project", "how are
+my projects", "check in on \<project>", or "stop tracking \<project>". It
+interviews the user one question at a time and always previews what a
+project's keyword/source rules would actually claim before writing, because
+the words a user says are rarely the words in their ledger: measured against
+a real 100+ promise ledger, "tech writing" and "documentation" both matched
+zero items, while the real vocabulary in use was "doc," "docs," "Confluence
+page," "playbook." A project is declared, never inferred - a customer is
+never treated as one - and it only ever writes `state.json`, never a note,
+because it's a lens over the ledger, not a second store.
+
+### radiate-out
+
+Phase 4, the mirror of chase-in: composes a per-context "Where things stand"
+status draft. Triggered by "give me a status update for \<context>", "where
+do things stand with \<context>", "draft an update for \<context>", "what
+should I tell \<context>", "post a status to \<channel>", or reactively "any
+update on \<thing>". It reads the ledger through the same Query interface as
+chase-in/drift/panic, groups by context, and - the hard gate - only includes
+a promise in the outward draft once `reconcile` has confirmed it against its
+live source; anything unverified moves to a separate internal "confirm
+before sending" list instead. This gate replaced a plain freshness check
+specifically because freshness alone missed a real mis-attributed item in
+production - a promise tagged to the wrong customer read as "fresh" and
+would have gone out regardless, which is why verification, not recency, is
+the bar.
+
+### reconcile
+
+The cross-cutting verification skill: cross-checks a promise against its
+live source before it's chased or published. Triggered explicitly by
+"verify this", "double-check X against Jira/Salesforce/Slack", "is this
+still open", "reconcile my chases", "confirm before we publish", and
+internally by every other skill before it surfaces or acts on an item. It
+dispatches by `promise.source.type` to a per-source adapter (issues, crm,
+chat, email, calendar, docs, calls) and is read-only against every source
+and against read-only backends - only the builtin `state.json` backend gets
+verify-metadata writes. Its mis-attribution signal is the clearest example
+of design-by-measurement in this repo: it started as a hard verdict
+(automatically marking a promise `mis-attributed` whenever its `owner`
+wasn't on that context's people roster), but tested against a real
+31-promise ledger it fired on 8 of 10 checkable promises and was wrong
+nearly every time, because real `owner` values are prose describing a
+vendor, a team, or several people at once - not a single roster name. It was
+downgraded to an advisory signal that only fires on actual cross-context
+evidence, cutting false positives from 8 to 2.
+
+### set-the-clock
+
+Phase 2, captures the promised-by date at the moment work flows in or out.
+Two triggers: (1) every decode reply ends with a clock-setting question; (2)
+an "outbound watch" fires only on high-stakes threads when the user gives
+info out with no return date - "let them know", "I'll send them X", "told
+them I'd...", "just replied", "sent the update", "answered \<person>". It
+never auto-logs and never auto-sends - it prompts, the user confirms, and
+the write is handed to the `ledger` skill's reality gate (named owner +
+concrete what + a date, or explicit user confirmation). It gates first on
+"is this even a promise": a task the user gives themselves ("add a task",
+"remind me to X") has no counterparty and routes straight to `ledger`'s
+`capture` instead, because interrogating someone for an owner and deadline
+that don't exist is worse than doing nothing - and the outbound-watch
+trigger is deliberately scoped to high-stakes threads only so it doesn't
+fire on every message that goes out (no flood).
+
+### sweep
+
+The source-facing pass that populates the ledger. Triggered by "run a
+sweep", "scan my sources", "what's stalled across my tools", "check for new
+stalls", "sweep my chat/email/issues", or "refresh the ledger from my
+sources". For each configured source it finds items pointed at the user,
+applies the four-part stall signal (user owes the next move, genuinely still
+open, gone quiet in business days, someone is waiting), and - the
+sweep-to-reconcile relationship at the center of the whole system - runs
+every candidate through the same per-source `reconcile` adapters the rest of
+ADHDecoder uses before writing anything: sweep finds candidates, reconcile
+verifies them, and only a `verified-open` result proceeds to dedup and
+write. The three-pass chat adapter (mention search, a self-expanding
+known-channel registry, silent-reply thread tracking) exists because search
+alone was proven unreliable against real data: a concise mention search
+showed two customers' threads as unanswered when the user had actually
+already replied and acted the same day - both false alarms that reading the
+full thread would have caught.
+
 ## Install (Claude Code)
 
 **Prerequisite: Python 3.8 or newer on your PATH as `python3`. Nothing to
