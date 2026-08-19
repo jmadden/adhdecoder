@@ -59,7 +59,9 @@ and leaves you a board.
 ## Skills in depth
 
 Each skill below is a paragraph, not the spec - full detail lives in each
-`skills/<name>/SKILL.md` and the relevant `reference/*.md`.
+`skills/<name>/SKILL.md` and the relevant `reference/*.md`. Promises point one
+of two directions, set by set-the-clock: `i-owe-them` (you owe someone) or
+`they-owe-me` (someone owes you).
 
 ### board
 
@@ -257,11 +259,12 @@ every candidate through the same per-source `reconcile` adapters the rest of
 ADHDecoder uses before writing anything: sweep finds candidates, reconcile
 verifies them, and only a `verified-open` result proceeds to dedup and
 write. The three-pass chat adapter (mention search, a self-expanding
-known-channel registry, silent-reply thread tracking) exists because search
-alone was proven unreliable against real data: a concise mention search
-showed two customers' threads as unanswered when the user had actually
-already replied and acted the same day - both false alarms that reading the
-full thread would have caught.
+known-channel registry, silent-reply thread tracking) exists because of a
+specific failure that justified building it: search alone was proven
+unreliable against real data when a concise mention search showed two
+customers' threads as unanswered when the user had actually already replied
+and acted the same day - both false alarms that reading the full thread
+would have caught.
 
 ## Install (Claude Code)
 
