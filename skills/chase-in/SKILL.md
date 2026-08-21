@@ -69,7 +69,9 @@ Compute `stakes` per `method.md` (honor `stakesOverride`).
   normal items; they join the board only once past due, then get louder as they
   age.
 
-Never surface `met` or `cleared` promises, ids in `dismissedFromBoard`, items
+Never surface `met` or `cleared` promises, promises the Query marks
+`derived.dismissed` (never the raw `dismissedFromBoard` list, which is only one of
+its two storage forms), items
 snoozed into the future (`snoozedUntil`), or `soft`/`none` ongoing items (those
 belong to `drift`).
 
@@ -217,7 +219,7 @@ correction that nothing reads gets the same thing wrong again.
 
 - **Never auto-send, never auto-post.** Drafts only.
 - **No flood.** Each promise appears once, at its current rung; aging gets more
-  prominent, never duplicated. Respect `dismissedFromBoard` (permanent) and
+  prominent, never duplicated. Respect a dismissal (permanent) and
   `snoozedUntil` (temporary); never date-chase `soft`/`none` ongoing items.
 - **Read-only.** No writes here; status/history changes go through the `ledger`
   skill.

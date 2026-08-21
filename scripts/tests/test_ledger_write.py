@@ -600,6 +600,129 @@ def main():
             "suppression is ADHDecoder bookkeeping, not task truth",
         )
 
+        # --- dismiss: take a promise off the board for good ---------------------
+        # The field had no writer, no reason, no surface and no gesture in any
+        # skill, so hand-editing was the only route - and the live ledger showed
+        # exactly what that produces: bare ids, no reason, four set redundantly in
+        # both storage forms, one pointing at a note that no longer exists.
+        dis_mtimes = {p: p.stat().st_mtime_ns
+                      for p in sorted((tmp / "vault").rglob("*.md"))}
+        dis_id = "Tasks/Provide the Omicron domain list.md"
+        result = run(config_path, ["dismiss", "--id", dis_id,
+                                   "--reason", "handled in the call, not my move"])
+        state = json.loads(state_path.read_text())
+        entry = state["itemMeta"][dis_id]
+        check(
+            result.returncode == 0 and entry.get("dismissedFromBoard") is True
+            and entry.get("dismissReason") == "handled in the call, not my move",
+            "a dismissal is written to the itemMeta companion with its reason",
+        )
+        check(
+            dis_id not in (state.get("dismissedFromBoard") or []),
+            "...and NOT to the top-level list, which is now the legacy form - "
+            "writing both is what the hand-edited ledger did",
+        )
+
+        # the reader must agree, or the writer wrote somewhere nothing looks
+        probe = subprocess.run(
+            [sys.executable, str(QUERY), "--config", str(config_path), "--now", NOW,
+             "--select", "all", "--json"],
+            capture_output=True, text=True,
+        )
+        seen = {p["id"]: p for p in json.loads(probe.stdout)["promises"]}
+        check(
+            (seen.get(dis_id, {}).get("derived") or {}).get("dismissed") is True,
+            "the Query's union reports it dismissed, so writer and reader agree",
+        )
+
+        before_bytes = state_path.read_bytes()
+        result = run(config_path, ["dismiss", "--id", dis_id, "--reason", "again"])
+        check(
+            result.returncode == 0 and "already dismissed" in result.stdout
+            and state_path.read_bytes() == before_bytes,
+            "a repeat dismissal is a no-op returning 0, leaving the original "
+            "reason alone",
+        )
+        result = run(config_path, ["dismiss", "--id", dis_id])
+        check(
+            result.returncode == 1 and "requires --reason" in result.stderr,
+            "a dismissal with no reason is refused; the overlay carries no history "
+            "so the reason is the only audit trail it has",
+        )
+        result = run(config_path, ["dismiss", "--id", "Tasks/Not a real note.md",
+                                   "--reason", "x"])
+        check(
+            result.returncode == 1 and "Query cannot see" in result.stderr,
+            "dismissing an unknown id is refused, so no NEW orphan can be created",
+        )
+        result = run(config_path, ["dismiss", "--id", "Tasks/Nope.md", "--undismiss"])
+        check(
+            result.returncode == 1 and "not dismissed in either form" in result.stderr,
+            "un-dismissing something that is not dismissed is refused, not a no-op",
+        )
+        check(
+            state_path.read_bytes() == before_bytes,
+            "every refused dismiss left the ledger byte-identical",
+        )
+        result = run(config_path, ["--dry-run", "dismiss", "--id", dis_id,
+                                   "--undismiss"])
+        check(
+            result.returncode == 0 and "DRY RUN" in result.stdout
+            and state_path.read_bytes() == before_bytes,
+            "--dry-run reports and writes nothing",
+        )
+        result = run(config_path, ["dismiss", "--id", dis_id, "--undismiss"])
+        state = json.loads(state_path.read_text())
+        check(
+            result.returncode == 0
+            and "dismissedFromBoard" not in state["itemMeta"].get(dis_id, {}),
+            "--undismiss clears the overlay flag",
+        )
+        check(
+            "dismissReason" not in state["itemMeta"].get(dis_id, {}),
+            "...and the reason with it, so no orphaned reason outlives the "
+            "dismissal it explained",
+        )
+
+        # The orphan case, which is the whole reason --undismiss skips the
+        # existence check: the live ledger carries a dismissal for a note that was
+        # deleted, and requiring Query visibility to clear one would make exactly
+        # that entry permanently uncleanable.
+        gamma = "Tasks/Spec the header passthrough for Gamma.md"
+        state = json.loads(state_path.read_text())
+        state["dismissedFromBoard"] = list(state.get("dismissedFromBoard") or []) + [
+            "Tasks/A note that no longer exists.md"
+        ]
+        state_path.write_text(json.dumps(state, indent=2))
+        result = run(config_path, ["dismiss", "--id",
+                                   "Tasks/A note that no longer exists.md",
+                                   "--undismiss"])
+        state = json.loads(state_path.read_text())
+        check(
+            result.returncode == 0
+            and "Tasks/A note that no longer exists.md"
+                not in state["dismissedFromBoard"],
+            "an ORPHANED dismissal - an id the Query cannot see - is still "
+            "clearable, which is the point of the asymmetry",
+        )
+        check(
+            gamma in state["dismissedFromBoard"],
+            "...and clearing one legacy entry leaves the other alone",
+        )
+        result = run(config_path, ["dismiss", "--id", gamma, "--undismiss"])
+        state = json.loads(state_path.read_text())
+        check(
+            result.returncode == 0 and gamma not in state["dismissedFromBoard"],
+            "--undismiss also clears the LEGACY top-level form, so a stale entry "
+            "there cannot shadow a cleared overlay",
+        )
+        check(
+            {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
+            == dis_mtimes,
+            "not one note was touched across the whole dismiss block - a dismissal "
+            "is board state, not task truth",
+        )
+
         # --- capture: create a task note where the user works -------------------
         vault_tasks = tmp / "vault" / "Tasks"
         before_count = len(list(vault_tasks.glob("*.md")))

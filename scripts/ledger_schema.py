@@ -38,7 +38,8 @@ PROJECT = {
 ITEM_META = {
     "snoozedUntil", "snoozeReason", "deadlineType", "deadlineTypeReason",
     "verifyStatus", "verifyReason", "lastVerified", "source", "noteOnly",
-    "dismissedFromBoard", "markMetDraft", "updateDraft", "appliedMarkMet",
+    "dismissedFromBoard", "dismissReason", "markMetDraft", "updateDraft",
+    "appliedMarkMet",
 }
 # One entry of the top-level `suppressed` list: a SOURCE REF the sweep must never
 # turn into a promise again. Nothing to do with the derived board term

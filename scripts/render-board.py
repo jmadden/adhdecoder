@@ -101,7 +101,7 @@ def group_promises(promises, now):
     shipped_floor = today - timedelta(days=SHIPPED_WINDOW_DAYS)
 
     board = {"ready": [], "move": [], "waiting": [], "done": []}
-    tomorrow, waiting_tab, shipped, history, snoozed = [], [], [], [], []
+    tomorrow, waiting_tab, shipped, history, snoozed, dismissed = [], [], [], [], [], []
 
     for promise in promises:
         if promise["_open"]:
@@ -116,6 +116,14 @@ def group_promises(promises, now):
                 # deprecated for.
                 if promise["_snoozed"]:
                     snoozed.append(promise)
+                elif promise["_dismissed"]:
+                    # A dismissal used to get no surface at all, on the reasoning
+                    # that "a dismissal means gone". But gone-from-the-work-groups
+                    # is not the same as gone-from-the-record, and with no surface
+                    # a pile of five built up unnoticed, four of them for items the
+                    # user went on to finish anyway. Same argument as the snooze
+                    # block directly above.
+                    dismissed.append(promise)
                 continue
             if promise["_readyToClose"]:
                 board["ready"].append(promise)
@@ -143,7 +151,8 @@ def group_promises(promises, now):
     # byte-for-byte across two runs, so "whatever order the ledger yielded" is
     # deterministic only until the ledger reorders
     snoozed.sort(key=lambda p: (str(p.get("snoozedUntil") or ""), str(p["id"])))
-    return board, tomorrow, waiting_tab, shipped, history, snoozed
+    dismissed.sort(key=lambda p: str(p["id"]))
+    return board, tomorrow, waiting_tab, shipped, history, snoozed, dismissed
 
 
 # --------------------------------------------------------------------------
@@ -360,7 +369,37 @@ def snoozed_html(snoozed):
     )
 
 
-def board_groups_html(board, config, now, snoozed):
+def dismissed_html(dismissed):
+    """A collapsed list of promises the user took off the board for good.
+
+    Mirrors `snoozed_html` deliberately, including the no-zero-state rule. The
+    reason is rendered because `dismissReason` is a field a run can now write, and
+    this repo does not keep write-only fields: a dismissal nothing displays is the
+    invisible off-switch that `parseError` and the stored `frontmatterWarning` were
+    each deprecated for. Legacy entries predate the reason and say so rather than
+    rendering a blank.
+    """
+    if not dismissed:  # no permanent "Dismissed (0)" zero-state
+        return ""
+    rows = "".join(
+        "<li><b>%s</b> <span class=\"chip c-need\">dismissed</span> %s</li>"
+        % (
+            esc(promise.get("what") or promise.get("title")),
+            esc(promise.get("dismissReason") or "no reason recorded (legacy entry)"),
+        )
+        for promise in dismissed
+    )
+    return (
+        '<details class="hist">\n'
+        '  <summary><span class="htitle">Dismissed (%d)</span></summary>\n'
+        '  <div class="hbody"><ul>%s</ul>\n'
+        '    <p class="pmeta">Undo with <code>dismiss --id &lt;id&gt; --undismiss</code></p>'
+        "</div>\n"
+        "</details>" % (len(dismissed), rows)
+    )
+
+
+def board_groups_html(board, config, now, snoozed, dismissed):
     blocks = []
     for key, label, dot in GROUP_META:
         items = board[key]
@@ -381,6 +420,9 @@ def board_groups_html(board, config, now, snoozed):
     parked = snoozed_html(snoozed)
     if parked:
         blocks.append(parked)
+    killed = dismissed_html(dismissed)
+    if killed:
+        blocks.append(killed)
     return "\n".join(blocks)
 
 
@@ -671,7 +713,8 @@ def lagging_html(rollups):
 
 def render(config, promises, failures, collapsed, warnings, state, now, template_text,
            rollups=()):
-    board, tomorrow, waiting_tab, shipped, history, snoozed = group_promises(promises, now)
+    board, tomorrow, waiting_tab, shipped, history, snoozed, dismissed = group_promises(
+        promises, now)
     rollups = list(rollups)
     lagging = [r for r in rollups if r["rollup"]["lag"]]
     out = template_text
@@ -692,7 +735,7 @@ def render(config, promises, failures, collapsed, warnings, state, now, template
         (r"<!-- RENDER lagging projects here.*?-->", lagging_html(rollups)),
         (r"<!-- RENDER project cards here -->", projects_html(rollups, promises)),
         (r"<!-- RENDER today color groups here:.*?-->",
-         board_groups_html(board, config, now, snoozed)),
+         board_groups_html(board, config, now, snoozed, dismissed)),
         (r"<!-- RENDER \.win rows here -->", shipped_html(shipped)),
         (r"<!-- RENDER \.waitrow rows here -->", waiting_html(waiting_tab, now)),
         (r"<!-- RENDER upcoming \.big cards here -->", tomorrow_html(tomorrow, config, now)),
@@ -702,7 +745,8 @@ def render(config, promises, failures, collapsed, warnings, state, now, template
         out, hits = re.subn(pattern, lambda _m, r=replacement: r, out, count=1, flags=re.S)
         if not hits:
             raise SystemExit("template is missing an injection point: %s" % pattern)
-    return out, (board, tomorrow, waiting_tab, shipped, history, snoozed, rollups)
+    return out, (board, tomorrow, waiting_tab, shipped, history, snoozed, dismissed,
+                 rollups)
 
 
 def write_atomic(target, text):
@@ -757,7 +801,8 @@ def main(argv=None):
         config, promises, failures, collapsed, warnings, state, now, template_text,
         query_meta["projects"],
     )
-    board, tomorrow, waiting_tab, shipped, history, snoozed, rollups = groups
+    (board, tomorrow, waiting_tab, shipped, history, snoozed, dismissed,
+     rollups) = groups
 
     target = args.out or config.board_path
     if target:
@@ -768,13 +813,17 @@ def main(argv=None):
             "ready-to-close %d | your-move %d | waiting-group %d | done-today %d | "
             "waiting-tab %d | tomorrow %d | shipped %d | history %d | "
             "projects %d (%d lagging) | parse-failures %d | snoozed %d | "
-            "suppressed %d"
+            "dismissed %d | suppressed %d"
             % (
                 len(board["ready"]), len(board["move"]), len(board["waiting"]),
                 len(board["done"]), len(waiting_tab), len(tomorrow), len(shipped),
                 len(history), len(rollups),
                 len([r for r in rollups if r["rollup"]["lag"]]), len(failures),
                 len(snoozed),
+                # every dismissed id in state, not just the Query-visible ones in
+                # the group: the gap between the two IS the orphan count, and
+                # hiding it is what let a dismissal outlive its note by weeks
+                len(lq.dismissed_ids(state)),
                 # `state["suppressed"]`, the source refs the sweep must not raise
                 # - NOT the derived `_suppressed` the grouping above uses. Counted
                 # here so a growing suppression list is visible every run instead
@@ -788,6 +837,20 @@ def main(argv=None):
             print("  parse failure: %s (%s)" % (failure["file"], failure["symptom"]))
         for warning in warnings:
             print("  frontmatter warning: %s (%s)" % (warning["file"], warning["warning"]))
+        # Computed against every promise the Query returned, NOT against the board
+        # buckets. A dismissed item that has since been closed is in `shipped` or
+        # `history`, never in the `dismissed` bucket (which only collects OPEN
+        # ones), so bucket-based arithmetic called four perfectly visible closed
+        # items orphans. An orphan is an id no promise or note answers to at all.
+        known = {str(promise["id"]) for promise in promises}
+        for orphan in sorted(lq.dismissed_ids(state) - known):
+            print("  dismissal with no promise or note: %s (clear it with "
+                  "`dismiss --id <id> --undismiss`)" % orphan)
+        for promise in dismissed:
+            print("  dismissed: %s (%s)" % (
+                promise.get("what") or promise.get("title"),
+                promise.get("dismissReason") or "no reason recorded (legacy entry)",
+            ))
         for promise in snoozed:
             print("  snoozed: %s (until %s - %s)" % (
                 promise.get("what") or promise.get("title"),

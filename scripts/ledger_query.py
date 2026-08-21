@@ -572,6 +572,33 @@ def read_state(config):
         )
 
 
+def dismissed_ids(state):
+    """Every promise id dismissed from the board, in either storage form.
+
+    The union the Query applies per-record (`_dismissed`), exposed for the surfaces
+    that need to count dismissals rather than decorate one promise. It lives here
+    for the usual reason: two derivations of "dismissed" would disagree exactly
+    where it matters, and a surface that only counted the Query-visible ones would
+    silently drop the orphans - which is the failure that let a dismissal outlive
+    its deleted note.
+
+    `dismissedFromBoard` is the legacy top-level list; `itemMeta` is what `dismiss`
+    writes now. Both are read, because a real ledger carries entries written before
+    the op existed.
+    """
+    ids = {
+        str(entry)
+        for entry in (state.get("dismissedFromBoard") or [])
+        if isinstance(entry, str) and entry.strip()
+    }
+    item_meta = state.get("itemMeta") or {}
+    if isinstance(item_meta, dict):
+        for promise_id, entry in item_meta.items():
+            if isinstance(entry, dict) and entry.get("dismissedFromBoard"):
+                ids.add(str(promise_id))
+    return ids
+
+
 # --------------------------------------------------------------------------
 # suppressed source refs (NOT the derived board term - see below)
 # --------------------------------------------------------------------------
@@ -940,7 +967,7 @@ def query(config, now):
         for field in (
             "verifyStatus", "verifyReason", "lastVerified", "snoozedUntil",
             "snoozeReason", "deadlineType", "deadlineTypeReason", "why", "noteOnly",
-            "markMetDraft", "updateDraft", "appliedMarkMet",
+            "markMetDraft", "updateDraft", "appliedMarkMet", "dismissReason",
         ):
             if field in meta and meta[field] is not None:
                 promise[field] = meta[field]

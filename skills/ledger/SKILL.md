@@ -145,6 +145,36 @@ in a collapsed **Snoozed (N)** group, so a hold stays reviewable.
 Do not confuse this with `project-set --snooze <project-id>`, which quiets a
 project's rollup and deliberately leaves its members surfacing.
 
+**Dismiss from the board.** Take a promise off the board for good: not done, not
+snoozed until a date, just not the user's move any more. Triggered by "kill this
+off my board", "drop this", "I don't need to see this again", "take this off my
+list".
+
+```
+ledger_write.py --config <cfg> dismiss --id <id> --reason "<why>"
+ledger_write.py --config <cfg> dismiss --id <id> --undismiss
+```
+
+`dismiss` is the writer, and before it there was none for either storage form -
+so hand-editing `state.json` was the only route, and a real ledger ended up with
+five bare ids, no reasons, four set redundantly in both forms, and one pointing at
+a deleted note. It writes `itemMeta[<id>]` and never the note, in either write
+mode: a dismissal is ADHDecoder-owned board state, not task truth, which is why
+the field is absent from the promise schema entirely. `--reason` is required, for
+the same reason `snooze` requires one: an overlay carries no history, so the
+reason is the only audit trail there is.
+
+Reach for it only when the item is genuinely not the user's move. If the work is
+**done**, mark it met. If it is **paused until a date**, snooze it. If it was
+**handled outside the system**, `enrich --status cleared`. A dismissal is the
+"stop showing me this and I am not claiming anything about it" valve.
+
+Choosing between the three neighbours matters, because `dismiss` refuses an id the
+Query cannot see (so no new orphan can be created) while `--undismiss` deliberately
+does not - an orphan is by definition an id the Query cannot see, and requiring
+visibility to clear one would make the existing orphan permanently uncleanable.
+`--undismiss` clears both forms, so a stale legacy entry cannot shadow it.
+
 **Suppress a source ref.** Stop the sweep ever turning a source ref into a
 promise again - a dead lead, a record an earlier run created for itself, a
 wrong-attribution hit.

@@ -68,6 +68,23 @@ are the only ones deliberately kept off the work groups, so the count is the one
 signal that a pile is building - and a snooze that has quietly outlived its reason
 is work the user thinks is handled. If any are past due to return, say so.
 
+Relay `dismissed N` too, and read its detail lines. A dismissal is permanent by
+intent, so this count is the only thing that keeps a growing pile accountable:
+in a real ledger five had accumulated with no surface anywhere, four of them for
+items the user went on to finish anyway. Two things to act on rather than just
+echo:
+
+- a line reading **"dismissal with no promise or note"** is an orphan - the note
+  was deleted or renamed and the entry outlived it. Offer to clear it with
+  `dismiss --id <id> --undismiss`.
+- a dismissal reading **"no reason recorded (legacy entry)"** predates the
+  `dismiss` op. Worth asking whether it still belongs, since nothing can say why
+  it is there.
+
+If the user wants something off the board ("kill this", "drop this", "I don't
+need to see this again"), that is `dismiss` via the `ledger` skill - never a hand
+edit, and never silently instead of marking it met.
+
 The recap's `suppressed N` is a different thing wearing the same word: source refs
 the sweep must never raise again, not cards being hidden. Relay the count only.
 It has no per-item lines by design - the reasons are `doctor`'s check 7 to report -

@@ -54,7 +54,13 @@ scripts/ledger_write.py       THE write path. state.json ops (reality gate, sche
                               promise again: top-level list, NOT routed, reason
                               required, append-only except --unsuppress, and
                               ENFORCED in `add` (exact match on source.ref) so the
-                              block cannot be forgotten rather than obeyed
+                              block cannot be forgotten rather than obeyed.
+                              `dismiss` takes a promise off the board: itemMeta
+                              only (the field is absent from PROMISE on purpose -
+                              board state, not task truth), reason required,
+                              `--undismiss` clears BOTH storage forms and, unlike
+                              `dismiss`, tolerates an id the Query cannot see so
+                              an orphaned entry stays cleanable
 scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
                               the once-per-day guarantee) and which source refs
                               it must never raise (`suppressedRefs`, via
@@ -71,8 +77,10 @@ scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               and the selectors the read-side skills ask for,
                               plus suppressed_source_refs() - the SOURCE-ref
                               block list, not the derived board term of the same
-                              name. Read-only, no write path. Underscored (not
-                              kebab-case) because it is the one importable module
+                              name - and dismissed_ids(), the union of the two
+                              dismissal storage forms. Read-only, no write path.
+                              Underscored (not kebab-case) because it is the one
+                              importable module
 scripts/render-board.py       the board renderer; implements reference/dashboard.md
                               (pure: config + ledger + clock in, HTML out).
                               Imports ledger_query; owns only grouping + HTML

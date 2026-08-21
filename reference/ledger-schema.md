@@ -42,12 +42,21 @@ plus the minimum needed to track and dedup. Everything else it references via
   (parent message ts). The sweep re-reads these each run and surfaces new
   replies since `lastSwept` even when they never re-mention the user
   (silent-reply tracking). Self-expanding, same discipline as `knownChannels`.
-- **dismissedFromBoard** — ids the user killed off the board; never re-surface.
-  Canonical form. An `itemMeta.<id>.dismissedFromBoard: true` means the same
-  thing for one item; Query treats the two as a union (either one dismisses).
+- **dismissedFromBoard** — ids the user took off the board; the sweep, chase and
+  drift never re-surface them as work. **Legacy form, read but never written.**
+  `dismiss` writes `itemMeta.<id>.dismissedFromBoard: true` + `dismissReason`
+  instead; Query unions the two (either one dismisses), so entries written before
+  the op existed keep working. It used to be labelled the canonical form, with no
+  writer for either: hand-editing was the only route, and the result in a real
+  ledger was five bare ids with no reason, four of them redundantly set in BOTH
+  forms, and one pointing at a note that had since been deleted. Bare strings are
+  why the reason had to move to the overlay — there is nowhere to put one here.
   A pending draft outranks a dismissal, so the board still renders a dismissed
   item in **Ready to close** (`reference/dashboard.md`) — dismissal means "stop
   showing me this as work", a draft is an unanswered question about the record.
+  Read `ledger_query.dismissed_ids()` for the union rather than either list
+  alone: a surface that counted only the Query-visible ones is what let a
+  dismissal outlive its note for weeks.
 - **suppressed** — `{ ref, reason, ts, recordId?, source?, context? }` for source
   refs the sweep must stop resurfacing at all (a dead lead, a self-created record,
   a wrong-attribution hit). `ref` and `reason` are always present; `ts` is set by
@@ -188,7 +197,18 @@ work as open.
   codebase ever wrote the field — every instance in the wild was hand-written by
   a session, which is why no writer needed removing, only the reader. If a lint
   is worth showing, it is worth being checkable; make it a live check.
-- **dismissedFromBoard** — per-item form of the top-level list; see above.
+- **dismissedFromBoard** — `true` when the user took this item off the board.
+  **The canonical form, and `dismiss` is the writer** (`--undismiss` clears it,
+  and clears the legacy top-level entry too so a stale one cannot shadow it).
+  Lives here rather than on the record because it is ADHDecoder-owned board
+  state, not task truth: the field is deliberately absent from the promise
+  schema, so there is no record branch to route to and no note is written in any
+  write mode. The board renders it in a collapsed **Dismissed (N)** group and
+  counts it in the recap.
+- **dismissReason** — why an item was taken off the board, in the user's words.
+  Required by `dismiss`, never optional, for the same reason `snoozeReason` is:
+  an overlay carries no history, so this is the only audit trail a dismissal has.
+  Absent on the legacy bare-string entries, which render as "no reason recorded".
 
 Invariant: **no overlay field is write-only.** If a run can write a field here,
 a surface must render it, in the same change that introduces it. This started as

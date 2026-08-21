@@ -43,6 +43,8 @@ Usage:
     ledger_write.py --config CFG suppress --ref REF --reason R [--source S]
                                                 [--context C] [--record-id ID]
     ledger_write.py --config CFG suppress --ref REF --unsuppress
+    ledger_write.py --config CFG dismiss --id ID --reason R
+    ledger_write.py --config CFG dismiss --id ID --undismiss
     ledger_write.py --config CFG record-sweep   [--sources-json JSON] [--now ISO]
     ledger_write.py --config CFG mark-seen --id ID [--id ID ...]
 
@@ -940,6 +942,130 @@ def op_promote(args, config, now):
     return 0
 
 
+def _clear_dismissal(state, promise_id):
+    """Remove a dismissal in BOTH forms, pruning an emptied itemMeta entry.
+
+    Both, because the Query ORs them (`_dismissed` in ledger_query.py): clearing
+    only the overlay leaves a top-level entry that still reads as dismissed, and
+    the op would report success while changing nothing - the same shadowing trap
+    `_clear_overlay_snooze` exists to prevent. The live ledger already carried
+    four ids set in both places at once, which is what hand-editing produces when
+    no op owns the write.
+
+    Returns True if anything was actually removed, so the caller can refuse a
+    no-op rather than claiming a clear it did not perform.
+    """
+    removed = False
+    top = state.get("dismissedFromBoard")
+    if isinstance(top, list):
+        kept = [entry for entry in top if entry != promise_id]
+        if len(kept) != len(top):
+            state["dismissedFromBoard"] = kept
+            removed = True
+
+    item_meta = state.get("itemMeta") or {}
+    entry = item_meta.get(promise_id)
+    if isinstance(entry, dict):
+        for field in ("dismissedFromBoard", "dismissReason"):
+            if entry.pop(field, None) is not None:
+                removed = True
+        # an entry left holding only a cleared dismissal is an orphan, same rule
+        # as _clear_overlay_snooze applies to a cleared snooze
+        if not entry:
+            del item_meta[promise_id]
+    return removed
+
+
+def op_dismiss(args, config, now):
+    """Take a promise off the board for good: not done, just not the user's move.
+
+    `dismissedFromBoard` had no writer, no reason, no surface and no specified
+    gesture - `skills/board/SKILL.md` never mentioned the concept at all - so the
+    only way it ever happened was hand-editing `state.json`. The live ledger shows
+    exactly what that produces: five bare ids with no reason and no timestamp, four
+    of them redundantly set in both storage forms, and one pointing at a note that
+    no longer exists.
+
+    Writes the `itemMeta` companion and NEVER the top-level list, which is now the
+    legacy form (`reference/ledger-schema.md`). Not routed through `_route` either,
+    and the reason is in the schema rather than a preference: `dismissedFromBoard`
+    is in ITEM_META and TOP_LEVEL but NOT in PROMISE, because a dismissal is
+    ADHDecoder-owned board state and not task truth on any backend. So there is no
+    record branch to route to, and no note is written in any write mode.
+
+    `--reason` is required for the same reason `snooze` requires one: the overlay
+    carries no history, so the reason is the only audit trail a dismissal has, and
+    an unexplained one is indistinguishable from a bug three weeks later.
+
+    Asymmetric on existence checks, deliberately. `dismiss` refuses an id the
+    Query cannot see, so no NEW orphan can be created (op_snooze's rule).
+    `--undismiss` does NOT, because an orphan is BY DEFINITION an id the Query
+    cannot see - requiring visibility to clear one would make the existing orphan
+    permanently uncleanable, which is how it got to be a problem in the first
+    place.
+    """
+    if not args.id:
+        raise Refused("dismiss needs --id: the promise to take off the board")
+    if not args.undismiss and not args.reason:
+        raise Refused(
+            "`dismiss` requires --reason: the overlay carries no history, so the "
+            "reason is the only audit trail a dismissal has, and an unexplained one "
+            "is indistinguishable from a bug three weeks later"
+        )
+
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    if args.undismiss:
+        if args.dry_run:
+            print("DRY RUN: would un-dismiss %s" % args.id)
+            return 0
+        if not _clear_dismissal(state, args.id):
+            raise Refused(
+                "%r is not dismissed in either form, so there is nothing to clear"
+                % args.id
+            )
+        backup_path = backup(config.state_file, config.instance_path)
+        commit(config.state_file, state, before, backup_path, problems_before)
+        print("un-dismissed %s - it can surface as work again" % args.id)
+        return 0
+
+    # checked before touching itemMeta, because setdefault creates an empty entry
+    # as a side effect of asking, and an overlay entry for an id the Query cannot
+    # see is exactly how orphaned records accumulate
+    match = None
+    for promise in existing_union(config, now):
+        if promise.get("id") == args.id:
+            match = promise
+            break
+    if match is None:
+        raise Refused(
+            "no promise or note with id %r - refusing to dismiss something the "
+            "Query cannot see (that is how the orphaned dismissal already in the "
+            "wild got there)" % args.id
+        )
+
+    already = args.id in (state.get("dismissedFromBoard") or [])
+    entry = state.get("itemMeta", {}).get(args.id) or {}
+    if already or entry.get("dismissedFromBoard"):
+        print("already dismissed (%s)"
+              % (entry.get("dismissReason") or "no reason recorded"))
+        return 0
+
+    if args.dry_run:
+        print("DRY RUN: would dismiss %s - %s" % (args.id, args.reason))
+        return 0
+
+    target = state.setdefault("itemMeta", {}).setdefault(args.id, {})
+    target["dismissedFromBoard"] = True
+    target["dismissReason"] = args.reason.strip()
+    backup_path = backup(config.state_file, config.instance_path)
+    commit(config.state_file, state, before, backup_path, problems_before)
+    print("dismissed %s - %s" % (args.id, args.reason.strip()))
+    return 0
+
+
 def _find_suppression(entries, ref):
     """Index of the entry suppressing `ref`, or None. Case-folded exact match.
 
@@ -1260,6 +1386,7 @@ OPS = {
     "draft-mark-met": op_draft_mark_met,
     "snooze": op_snooze,
     "suppress": op_suppress,
+    "dismiss": op_dismiss,
     "record-sweep": op_record_sweep,
     "mark-seen": op_mark_seen,
 }
@@ -1336,6 +1463,12 @@ def main(argv=None):
     p_suppress.add_argument("--record-id", default=None,
                             help="the SOURCE system's record id, not a promise id")
     p_suppress.add_argument("--unsuppress", action="store_true")
+
+    p_dismiss = sub.add_parser(
+        "dismiss", help="take a promise off the board for good, or clear that")
+    p_dismiss.add_argument("--id", required=True)
+    p_dismiss.add_argument("--reason", default=None, help="required unless --undismiss")
+    p_dismiss.add_argument("--undismiss", action="store_true")
 
     p_sweep = sub.add_parser("record-sweep", help="stamp lastSwept + append a sweepLog entry")
     p_sweep.add_argument("--sources-json", default=None, help="JSON {source: result}; stdin if omitted")

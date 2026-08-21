@@ -39,9 +39,12 @@ slip from inattention, not forgetting.
   time-sensitive.
 - **Respects cooldown.** Skip any promise whose `driftClearedUntil` is still
   in the future.
-- **Respects dismissals and snoozes.** Never resurface an id in
-  `dismissedFromBoard` (permanent) or one whose `snoozedUntil` is still in the
-  future (temporary), regardless of which path below flagged it.
+- **Respects dismissals and snoozes.** Never resurface a promise the Query marks
+  `derived.dismissed` (the user took it off the board) or one whose `snoozedUntil`
+  is still in the future (temporary), regardless of which path below flagged it.
+  Read the Query's flag, never `state["dismissedFromBoard"]` directly: a dismissal
+  lives in two storage forms and the Query owns the union, so checking the list
+  alone silently misses every dismissal `dismiss` writes.
 - **Owns ongoing items.** `soft`/`none` (no-hard-deadline) items never date-chase
   in `chase-in`; drift is where they surface if they go quiet - the existing
   staleness paths below already cover them, no threshold change.
@@ -72,8 +75,8 @@ All of:
 1. `status` is `pending` (skip `met` / `cleared`).
 2. It is time-sensitive: `overdue` is true, OR (`due-soon` and `stakes` is
    `high`).
-3. `driftClearedUntil` is null or in the past (not in cooldown), the id is not
-   in `dismissedFromBoard`, and `snoozedUntil` is null or in the past.
+3. `driftClearedUntil` is null or in the past (not in cooldown),
+   `derived.dismissed` is false, and `snoozedUntil` is null or in the past.
 4. Days since `lastVerified` is 3 or more - nothing has touched or confirmed
    it in that window while it is due or overdue.
 
@@ -89,8 +92,8 @@ at all: the silent-rot zone. For an **open** promise with no `expectBy`, use
 **staleness** instead of overdue-ness:
 
 1. `status` is `pending`, and `expectBy` is absent.
-2. `driftClearedUntil` is null or in the past, the id is not in
-   `dismissedFromBoard`, and `snoozedUntil` is null or in the past.
+2. `driftClearedUntil` is null or in the past, `derived.dismissed` is false, and
+   `snoozedUntil` is null or in the past.
 3. Compute days since the item was last **touched by a human** in business days
    (weekends excluded). "Touched" is a close, an edit to the backing note, a
    logged update, or the item arriving - the Query derives it as

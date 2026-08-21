@@ -49,7 +49,13 @@ exposes `snoozedUntil`. On the active tabs (Board / Waiting / Tomorrow):
   the point of a snooze; dropping them from the page entirely would make snooze
   an invisible off-switch, the failure `parseError` and the stored
   `frontmatterWarning` were each deprecated for.
-- skip `dismissedFromBoard` ids. These get no group: a dismissal means gone.
+- `dismissedFromBoard` ids get no *work* group, but they are not gone from the
+  page: they render in a collapsed **Dismissed (N)** group beside **Snoozed**.
+  They used to get no surface at all, on the reasoning that a dismissal means
+  gone - and five of them then piled up in a real ledger unnoticed, four for
+  items the user went on to finish anyway and one pointing at a deleted note.
+  Same rule as a snooze: a dismissal nothing displays is an invisible
+  off-switch, not a record.
 
 Closed items still appear in **Shipped** and **History** regardless of snooze.
 
@@ -185,12 +191,19 @@ that lives only in code drifts silently. Exact form, all counts always present:
 ```
 ready-to-close N | your-move N | waiting-group N | done-today N | waiting-tab N |
 tomorrow N | shipped N | history N | projects N (N lagging) | parse-failures N |
-snoozed N | suppressed N
+snoozed N | dismissed N | suppressed N
 ```
 
 (one physical line), then one indented detail line per parse failure, frontmatter
 warning, snoozed item, lagging project and deduped record, then `board: <path>`.
 Adding a group means adding its count here in the same change.
+
+`dismissed N` counts every dismissal in `state` — both storage forms, via
+`ledger_query.dismissed_ids()` — not just the ones the **Dismissed** group holds.
+The two differ by the dismissals a pending draft revived into **Ready to close**,
+plus any orphan whose promise or note no longer exists. Those orphans get their
+own detail line naming `--undismiss`, because the gap between the count and the
+group is the only place they are visible at all.
 
 `suppressed N` is the odd one out and deliberately so: it counts
 `state["suppressed"]` — source refs the sweep must never raise — not a board

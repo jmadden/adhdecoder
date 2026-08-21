@@ -80,6 +80,14 @@ See `reference/cutover.md` for the flip procedure and
   `reason` is required, not an optional note: on a read-only backend the overlay
   carries no history, so it is the only audit trail the snooze has. Implemented by
   `ledger_write.py snooze`; `--unsnooze` clears it.
+- **setDismissed(id, reason)** — take an item off the board, or clear that. Always
+  the `itemMeta` companion, on every backend, because `dismissedFromBoard` is
+  deliberately absent from the promise schema: a dismissal is ADHDecoder-owned
+  board state and not task truth, so there is no record branch and no note is
+  written in any write mode. `reason` is required (an overlay has no history).
+  Implemented by `ledger_write.py dismiss`; `--undismiss` clears it, and also
+  clears the legacy top-level `dismissedFromBoard` entry so a stale one cannot
+  shadow the cleared overlay.
 - **Not in this interface: suppressing a source ref.** `ledger_write.py suppress`
   writes the top-level `state["suppressed"]` list, which is keyed by source ref
   rather than by promise id and is not per-item metadata at all - so there is no

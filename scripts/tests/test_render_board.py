@@ -101,6 +101,15 @@ def snoozed_block(html):
     return html[start:html.find("</details>", start) + len("</details>")]
 
 
+def dismissed_block(html):
+    """Slice out the collapsed Dismissed group on the Board tab."""
+    start = html.find('<summary><span class="htitle">Dismissed (')
+    if start < 0:
+        return ""
+    start = html.rfind("<details", 0, start)
+    return html[start:html.find("</details>", start) + len("</details>")]
+
+
 def group_block(html, label):
     """Slice out one .today-group by its label, for group-scoped assertions.
 
@@ -384,9 +393,62 @@ def main():
             "the recap counts the suppressed SOURCE REFS too, so the list is not "
             "invisible between doctor runs",
         )
+        # Same lesson as the snooze block above, applied to a dismissal: `not in
+        # html` was too strong. It passed for a writer-less dismissal and would
+        # equally have passed for one that vanished the item entirely - and the
+        # live ledger proved that is not hypothetical, since five dismissals piled
+        # up unnoticed with no surface anywhere. Assert placement, not absence.
+        zeta = "Configure the Zeta test tenant"
+        for label in ("Ready to close (confirm)", "Your move",
+                      "Waiting, no clear action", "Done today"):
+            check(
+                zeta not in group_block(html, label),
+                "a dismissed item is not in the %r group" % label,
+            )
+        killed = dismissed_block(html)
         check(
-            "Configure the Zeta test tenant" not in html,
-            "a dismissed item with no pending draft is excluded",
+            zeta in killed and "Dismissed (1)" in killed,
+            "a dismissed item renders in the collapsed Dismissed group, with a count",
+        )
+        check(
+            "no reason recorded (legacy entry)" in killed,
+            "a legacy dismissal with no reason says so rather than rendering blank",
+        )
+        # 2, not 1: the count is every dismissal in state, while the group holds
+        # only those no draft revived. The fixture has both kinds - Zeta in the
+        # group, Gamma revived into Ready to close - and the count covers both,
+        # because the pile is what the number is for.
+        check(
+            "| dismissed 2" in stdout and "dismissed: %s" % zeta in stdout,
+            "the recap counts every dismissal in state, revived ones included, "
+            "and names the ones the group holds",
+        )
+        check(
+            "dismissal with no promise or note" not in stdout,
+            "a clean fixture reports no orphaned dismissals",
+        )
+        # Regression: the orphan check first compared against the board BUCKETS,
+        # which only collect OPEN promises - so a dismissed item that had since
+        # been closed sat in `shipped`/`history`, matched no bucket, and was
+        # reported as an orphan. Four of five live dismissals were misreported
+        # that way. An orphan is an id NO promise or note answers to.
+        # "Send the Epsilon onboarding pack" is CLOSED in the fixture, so it lands
+        # in shipped/history and never in the `dismissed` bucket.
+        closed_id = "Tasks/Send the Epsilon onboarding pack.md"
+        probe_state = tmp / "instance" / "state.json"
+        probe = json.loads(probe_state.read_text())
+        probe.setdefault("itemMeta", {}).setdefault(closed_id, {})[
+            "dismissedFromBoard"] = True
+        probe_state.write_text(json.dumps(probe, indent=2))
+        probe_stdout = run(config_path)
+        check(
+            "| dismissed 3" in probe_stdout,
+            "a closed dismissal still counts in the recap",
+        )
+        check(
+            "dismissal with no promise or note: %s" % closed_id not in probe_stdout,
+            "a dismissed promise the Query CAN see is never called an orphan, "
+            "whatever board bucket it landed in",
         )
         check(
             "Lambda promoted record" not in html,
