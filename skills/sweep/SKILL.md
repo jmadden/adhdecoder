@@ -57,8 +57,13 @@ promise again. **Drop any candidate whose source ref matches one** - no promise,
 no enrich, no mention - matching case-folded and exact on the ref, nothing
 looser (`reference/sweep.md`). This is reported to you rather than remembered by
 you on purpose: the list previously had no reader, and a ref marked dead came
-back on a later run. To add one, `ledger_write.py suppress --ref REF --reason
-"<why>"`; never hand-edit `state.json`.
+back on a later run.
+
+**`add` also refuses a suppressed `source.ref` outright**, so the block holds even
+if you never read this list - but drop the candidate here anyway, or your account
+of what the sweep did will claim work it never recorded. To add a suppression,
+`ledger_write.py suppress --ref REF --reason "<why>"`; never hand-edit
+`state.json`.
 
 The rule it enforces, which prose kept having to restate: **every enabled source
 is swept at least once per calendar day**, whatever its weight or cadence, so

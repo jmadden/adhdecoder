@@ -164,6 +164,13 @@ writes no note in any write mode. `sweep_plan.py` reports the list as
 `suppressedRefs` so the sweep is told rather than trusted to remember, and the
 board recap carries a `suppressed N` count.
 
+**`add` enforces it.** A promise whose `source.ref` is suppressed is refused, so
+the block is structural rather than advisory - no sweep or unattended run can
+resurrect the ref whatever it read. If that refusal ever blocks something real,
+the suppression was too broad: clear it with `--unsuppress` rather than working
+around it. `capture` is not gated, because the user is present and asking for that
+task by name.
+
 **Mark ongoing (set deadlineType).** Set `deadlineType` to `soft`/`none` (ongoing,
 no date-chasing) or back to `hard`. Builtin -> on the record; a read-only backend ->
 `itemMeta[<id>]` override, never the note.

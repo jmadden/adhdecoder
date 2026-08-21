@@ -518,6 +518,40 @@ def main():
             "a repeat --ref is a case-folded no-op returning 0, and append-only "
             "means the original reason is left exactly as it was",
         )
+        # The guard that makes a suppression structural rather than advisory:
+        # `add` is the only way a promise is born, so this closes the resurrection
+        # path even for a sweep that never read the plan.
+        SUPPRESSED_ADD = dict(
+            GOOD, id="ISSUE-777:example-watcher-only",
+            source={"type": "issues", "ref": "ISSUE-777",
+                    "url": "https://tracker.example.com/browse/ISSUE-777"},
+        )
+        result = run(config_path, ["add"], stdin=json.dumps(SUPPRESSED_ADD))
+        check(
+            result.returncode == 1 and "is suppressed" in result.stderr,
+            "a promise whose source ref is suppressed is REFUSED by `add`, so no "
+            "sweep can resurrect it whatever it read or skipped",
+        )
+        check(
+            "--unsuppress" in result.stderr
+            and "watcher-only ref" in result.stderr,
+            "...and the refusal names the reason and how to clear it, so an "
+            "over-broad suppression fails loudly instead of hiding a real ask",
+        )
+        # --dry-run so this probe does not claim the url it is built to carry,
+        # which would then collide with the re-add check at the end of the block
+        result = run(config_path, ["--dry-run", "add"], stdin=json.dumps(
+            dict(SUPPRESSED_ADD, id="ISSUE-777b:url-only",
+                 source={"type": "issues", "ref": "ISSUE-776",
+                         "url": "https://tracker.example.com/browse/ISSUE-777"})))
+        check(
+            result.returncode == 0 and "DRY RUN" in result.stdout,
+            "matching is exact on source.ref, never a scan of source.url for an "
+            "id it happens to contain - a wrongly-matched suppression would "
+            "silently hide a real ask",
+        )
+
+        before_bytes = state_path.read_bytes()
         result = run(config_path, ["suppress", "--ref", "ISSUE-888"])
         check(
             result.returncode == 1 and "requires --reason" in result.stderr,
@@ -552,6 +586,12 @@ def main():
         check(
             any(e["ref"] == "ISSUE-000" for e in state["suppressed"]),
             "...and removes only that one, leaving the rest of the list intact",
+        )
+        result = run(config_path, ["add"], stdin=json.dumps(SUPPRESSED_ADD))
+        check(
+            result.returncode == 0,
+            "once un-suppressed the same ref is addable again - the gate is the "
+            "list, not a permanent blocklist baked into the code",
         )
         check(
             {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
@@ -743,11 +783,14 @@ def main():
         )
 
         # --- dry run touches nothing -----------------------------------------
+        # Deliberately NOT ISSUE-000: that is the fixture's suppressed ref, and
+        # `add` now refuses it outright, which would make this check fail for a
+        # reason that has nothing to do with --dry-run.
         before_bytes = state_path.read_bytes()
         dry = dict(
-            GOOD, id="ISSUE-000:dry",
-            source={"type": "issues", "ref": "ISSUE-000",
-                    "url": "https://tracker.example.com/browse/ISSUE-000"},
+            GOOD, id="ISSUE-555:dry",
+            source={"type": "issues", "ref": "ISSUE-555",
+                    "url": "https://tracker.example.com/browse/ISSUE-555"},
         )
         result = run(config_path, ["--dry-run", "add"], stdin=json.dumps(dry))
         check(

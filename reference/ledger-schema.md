@@ -74,6 +74,15 @@ plus the minimum needed to track and dedup. Everything else it references via
   `suppressedRefs` by `scripts/sweep_plan.py` and counted in the board recap.
   Before that the list had no reader at all, so honouring it depended on a model
   remembering the field existed. Reasons are surfaced by `doctor`.
+  **`add` enforces it**, which is what makes a suppression structural rather than
+  advisory: `add` is the only way a promise is born, so a suppressed `source.ref`
+  cannot be resurrected by any sweep, skill or unattended run regardless of what
+  it read. Matching is **exact on `source.ref`**, case-folded and trimmed - never
+  a substring, never a scan of `source.url` for an id it contains. The refusal
+  names the ref, its reason and `--unsuppress`, so an over-broad suppression fails
+  loudly instead of quietly hiding a real ask. `capture` is deliberately not
+  gated: it runs with the user present asking for that task by name, and refusing
+  an explicit human ask answers the wrong question.
   Note the word is overloaded: `promise["_suppressed"]`, the emitted
   `derived.suppressed`, and `--select suppressed` all mean the derived **board**
   term ("do not render this card now"), which is a different concept at a

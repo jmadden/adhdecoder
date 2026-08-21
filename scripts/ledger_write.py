@@ -217,6 +217,36 @@ def op_add(args, config, now):
     before = digest(config.state_file)
     problems_before = validate_state(state)
 
+    # Checked first among the state-dependent gates: "this must never exist at
+    # all" outranks "this already exists". `suppress` used to be advisory - the
+    # sweep plan reported the refs and obeying them was the sweeping model's job -
+    # which meant a suppression held only for as long as something remembered to
+    # look. Enforcing it HERE makes it structural: `add` is the only way a promise
+    # is born, so no sweep, skill or unattended run can resurrect a suppressed ref
+    # whatever it read or skipped.
+    #
+    # Matched on `source.ref` only, case-folded and exact - never a substring, and
+    # never by scanning `source.url` for an id it happens to contain. Same reason
+    # stated in _find_suppression: a missed suppression is recoverable noise on one
+    # sweep, a wrongly-matched one silently hides a real ask.
+    #
+    # `capture` is deliberately NOT gated the same way: it runs with the user
+    # present, asking for this task by name, and refusing an explicit human ask
+    # would be answering the wrong question.
+    add_ref = (record.get("source") or {}).get("ref")
+    if add_ref:
+        entries = state.get("suppressed") or []
+        found = _find_suppression(entries, add_ref) if isinstance(entries, list) else None
+        if found is not None:
+            entry = entries[found]
+            raise Refused(
+                "source ref %r is suppressed, so it must never become a promise "
+                "again:\n  %s\n"
+                "If that is now wrong, clear it first:\n"
+                "  ledger_write.py --config CFG suppress --ref %s --unsuppress"
+                % (add_ref, entry.get("reason") or "no reason recorded", add_ref)
+            )
+
     if any(p.get("id") == record["id"] for p in state.get("promises") or []):
         raise Refused(
             "a promise with id %r already exists - use `enrich` to update it, "

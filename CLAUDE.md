@@ -52,7 +52,9 @@ scripts/ledger_write.py       THE write path. state.json ops (reality gate, sche
                               parks in itemMeta and no note is ever written).
                               `suppress` blocks a SOURCE ref from ever becoming a
                               promise again: top-level list, NOT routed, reason
-                              required, append-only except --unsuppress
+                              required, append-only except --unsuppress, and
+                              ENFORCED in `add` (exact match on source.ref) so the
+                              block cannot be forgotten rather than obeyed
 scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
                               the once-per-day guarantee) and which source refs
                               it must never raise (`suppressedRefs`, via
