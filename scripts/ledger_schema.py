@@ -28,17 +28,17 @@ PROMISE = {
     "id", "title", "context", "direction", "what", "owner", "expectBy", "status",
     "stakes", "stakesOverride", "source", "noteRef", "noteOnly", "created",
     "lastVerified", "verifyStatus", "verifyReason", "why", "deadlineType",
-    "snoozedUntil", "driftClearedUntil", "history", "promotedTo", "note",
-    "completedDate", "relatedRefs",
+    "snoozedUntil", "snoozeReason", "driftClearedUntil", "history", "promotedTo",
+    "note", "completedDate", "relatedRefs",
 }
 PROJECT = {
     "id", "name", "status", "aliases", "keywords", "sources", "include", "exclude",
     "targetDate", "checkInEvery", "lastCheckIn", "snoozedUntil", "note", "updated",
 }
 ITEM_META = {
-    "snoozedUntil", "deadlineType", "deadlineTypeReason", "verifyStatus",
-    "verifyReason", "lastVerified", "source", "noteOnly", "dismissedFromBoard",
-    "markMetDraft", "updateDraft", "appliedMarkMet",
+    "snoozedUntil", "snoozeReason", "deadlineType", "deadlineTypeReason",
+    "verifyStatus", "verifyReason", "lastVerified", "source", "noteOnly",
+    "dismissedFromBoard", "markMetDraft", "updateDraft", "appliedMarkMet",
 }
 
 # --- deprecated: recognised, reported as a note, never written again ------

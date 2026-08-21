@@ -47,7 +47,9 @@ scripts/ledger_write.py       THE write path. state.json ops (reality gate, sche
                               `capture` (add a task where the user works) and
                               `promote` (state.json promise -> note, then
                               collapse). Note ops need --confirmed, so no
-                              unattended run can create one
+                              unattended run can create one. `snooze` parks a
+                              promise (routed by _route, so a note-backed one
+                              parks in itemMeta and no note is ever written)
 scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
                               the once-per-day guarantee). Read-only arithmetic
 scripts/doctor_check.py       doctor's mechanical checks (config, backend, write

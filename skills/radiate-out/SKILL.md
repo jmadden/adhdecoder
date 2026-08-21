@@ -47,7 +47,12 @@ chase the user. Read `reference/radiate-out.md` (the full spec) and
    promise set, recomputed fresh (overdue, stakes, etc.) at read time. Honor
    `deadlineType` (a `soft`/`none` ongoing item is never "overdue" - present it
    as in-flight, never as a missed deadline) and `snoozedUntil` (a snoozed item
-   is excluded from the draft until its date).
+   is excluded from the draft until its date). Keeping a parked item out of the
+   published draft is right - a status update is outward-facing, and announcing
+   internally-parked work invites exactly the chasing this skill exists to stop.
+   But say so **to the user**, never in the draft: alongside it, report "N snoozed
+   item(s) withheld", with titles and return dates (one Query call, `--select
+   snoozed --json`, which carries `snoozedUntil` and `snoozeReason`). Dropping them silently is how a hold outlives its reason.
 2. Group by `context` (the promise's context field - a customer, project, or
    any stakeholder group). Within a context, split by `direction` and `status`
    into the three buckets below.

@@ -101,11 +101,19 @@ def group_promises(promises, now):
     shipped_floor = today - timedelta(days=SHIPPED_WINDOW_DAYS)
 
     board = {"ready": [], "move": [], "waiting": [], "done": []}
-    tomorrow, waiting_tab, shipped, history = [], [], [], []
+    tomorrow, waiting_tab, shipped, history, snoozed = [], [], [], [], []
 
     for promise in promises:
         if promise["_open"]:
             if promise["_suppressed"]:
+                # `_snoozed`, not `_suppressed`: the other term is a board
+                # dismissal, which is meant to stay gone. A snooze is a hold the
+                # user set and must be able to review, so it gets a surface -
+                # a writer without one is the invisible off-switch that
+                # `parseError` and the stored `frontmatterWarning` were each
+                # deprecated for.
+                if promise["_snoozed"]:
+                    snoozed.append(promise)
                 continue
             if promise["_readyToClose"]:
                 board["ready"].append(promise)
@@ -129,7 +137,11 @@ def group_promises(promises, now):
 
     history.sort(key=lambda p: (p["_completed"].isoformat() if p["_completed"] else "0000-00-00", str(p["id"])), reverse=True)
     shipped.sort(key=lambda p: (p["_completed"].isoformat() if p["_completed"] else "0000-00-00", str(p["id"])), reverse=True)
-    return board, tomorrow, waiting_tab, shipped, history
+    # soonest to come back first, id to break the tie: the render is compared
+    # byte-for-byte across two runs, so "whatever order the ledger yielded" is
+    # deterministic only until the ledger reorders
+    snoozed.sort(key=lambda p: (str(p.get("snoozedUntil") or ""), str(p["id"])))
+    return board, tomorrow, waiting_tab, shipped, history, snoozed
 
 
 # --------------------------------------------------------------------------
@@ -314,7 +326,39 @@ def card_html(promise, state, config, now):
     )
 
 
-def board_groups_html(board, config, now):
+def snoozed_html(snoozed):
+    """A collapsed, deliberately quiet list of holds the user set.
+
+    These are the only promises kept off every group and every tab on purpose,
+    so this block is the one thing standing between a snooze and a silent
+    disappearance. It renders one line each rather than cards: a parked item
+    that looks as loud as live work is the false-urgency problem inverted.
+
+    Reuses the `.hist` card styling, which is defined at top level rather than
+    under `.histlist`, so no new CSS and no new template marker are needed.
+    """
+    if not snoozed:  # no permanent "Snoozed (0)" zero-state; the board stays calm
+        return ""
+    rows = "".join(
+        "<li><b>%s</b> <span class=\"chip c-need\">snoozed to %s</span> %s</li>"
+        % (
+            esc(promise.get("what") or promise.get("title")),
+            esc(promise.get("snoozedUntil") or "?"),
+            esc(promise.get("snoozeReason") or "no reason recorded"),
+        )
+        for promise in snoozed
+    )
+    return (
+        '<details class="hist">\n'
+        '  <summary><span class="htitle">Snoozed (%d)</span></summary>\n'
+        '  <div class="hbody"><ul>%s</ul>\n'
+        '    <p class="pmeta">Undo with <code>snooze --id &lt;id&gt; --unsnooze</code></p>'
+        "</div>\n"
+        "</details>" % (len(snoozed), rows)
+    )
+
+
+def board_groups_html(board, config, now, snoozed):
     blocks = []
     for key, label, dot in GROUP_META:
         items = board[key]
@@ -328,7 +372,13 @@ def board_groups_html(board, config, now):
             "</div>" % (dot, esc(label), cards)
         )
     if not blocks:
-        return '<p class="pane-note">Nothing actionable today.</p>'
+        # a board whose only content is parked work is not an empty board, and
+        # saying "nothing actionable" while hiding three holds is the lie this
+        # group exists to stop
+        blocks.append('<p class="pane-note">Nothing actionable today.</p>')
+    parked = snoozed_html(snoozed)
+    if parked:
+        blocks.append(parked)
     return "\n".join(blocks)
 
 
@@ -619,7 +669,7 @@ def lagging_html(rollups):
 
 def render(config, promises, failures, collapsed, warnings, state, now, template_text,
            rollups=()):
-    board, tomorrow, waiting_tab, shipped, history = group_promises(promises, now)
+    board, tomorrow, waiting_tab, shipped, history, snoozed = group_promises(promises, now)
     rollups = list(rollups)
     lagging = [r for r in rollups if r["rollup"]["lag"]]
     out = template_text
@@ -639,7 +689,8 @@ def render(config, promises, failures, collapsed, warnings, state, now, template
     injections = [
         (r"<!-- RENDER lagging projects here.*?-->", lagging_html(rollups)),
         (r"<!-- RENDER project cards here -->", projects_html(rollups, promises)),
-        (r"<!-- RENDER today color groups here:.*?-->", board_groups_html(board, config, now)),
+        (r"<!-- RENDER today color groups here:.*?-->",
+         board_groups_html(board, config, now, snoozed)),
         (r"<!-- RENDER \.win rows here -->", shipped_html(shipped)),
         (r"<!-- RENDER \.waitrow rows here -->", waiting_html(waiting_tab, now)),
         (r"<!-- RENDER upcoming \.big cards here -->", tomorrow_html(tomorrow, config, now)),
@@ -649,7 +700,7 @@ def render(config, promises, failures, collapsed, warnings, state, now, template
         out, hits = re.subn(pattern, lambda _m, r=replacement: r, out, count=1, flags=re.S)
         if not hits:
             raise SystemExit("template is missing an injection point: %s" % pattern)
-    return out, (board, tomorrow, waiting_tab, shipped, history, rollups)
+    return out, (board, tomorrow, waiting_tab, shipped, history, snoozed, rollups)
 
 
 def write_atomic(target, text):
@@ -704,7 +755,7 @@ def main(argv=None):
         config, promises, failures, collapsed, warnings, state, now, template_text,
         query_meta["projects"],
     )
-    board, tomorrow, waiting_tab, shipped, history, rollups = groups
+    board, tomorrow, waiting_tab, shipped, history, snoozed, rollups = groups
 
     target = args.out or config.board_path
     if target:
@@ -714,12 +765,13 @@ def main(argv=None):
         summary = (
             "ready-to-close %d | your-move %d | waiting-group %d | done-today %d | "
             "waiting-tab %d | tomorrow %d | shipped %d | history %d | "
-            "projects %d (%d lagging) | parse-failures %d"
+            "projects %d (%d lagging) | parse-failures %d | snoozed %d"
             % (
                 len(board["ready"]), len(board["move"]), len(board["waiting"]),
                 len(board["done"]), len(waiting_tab), len(tomorrow), len(shipped),
                 len(history), len(rollups),
                 len([r for r in rollups if r["rollup"]["lag"]]), len(failures),
+                len(snoozed),
             )
         )
         print(summary)
@@ -727,6 +779,12 @@ def main(argv=None):
             print("  parse failure: %s (%s)" % (failure["file"], failure["symptom"]))
         for warning in warnings:
             print("  frontmatter warning: %s (%s)" % (warning["file"], warning["warning"]))
+        for promise in snoozed:
+            print("  snoozed: %s (until %s - %s)" % (
+                promise.get("what") or promise.get("title"),
+                promise.get("snoozedUntil"),
+                promise.get("snoozeReason") or "no reason recorded",
+            ))
         for record in rollups:
             if record["rollup"]["lag"]:
                 print("  project lagging: %s (%s)"

@@ -76,7 +76,10 @@ See `reference/cutover.md` for the flip procedure and
   below stays with the skills and the active backend.
 - **recordVerify(id, verifyStatus, reason, lastVerified)** — persist reconcile
   metadata (writable: on the record; read-only: into `itemMeta[<id>]`).
-- **setSnooze(id, until, note?)** — persist a snooze (same backend-scoped rule).
+- **setSnooze(id, until, reason)** — persist a snooze (same backend-scoped rule).
+  `reason` is required, not an optional note: on a read-only backend the overlay
+  carries no history, so it is the only audit trail the snooze has. Implemented by
+  `ledger_write.py snooze`; `--unsnooze` clears it.
 - **recordSourceLink(id, source)** — persist an enriched source link (same rule).
 - **write(promise) / update(promise)** — create or update a promise. Writable
   backends only; a read-only backend instead returns a draft/instruction and

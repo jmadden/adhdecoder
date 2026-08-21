@@ -172,6 +172,14 @@ If the user taps it: hand off to the `ledger` skill to set
 append it to `history`. Do not clear anything without the user's tap - never
 auto-clear a flag.
 
+If what they say is "parked", not "handled" - blocked on someone, waiting on a
+decision, deliberately on hold - that is a **snooze**, not a clear: hand off to the
+`ledger` skill's `snooze --id <id> --until <date> --reason "<why>"`. Ask when it
+should come back, and use their words as the reason. The two are different claims
+and must not be collapsed: a clear says this is done being drift, a snooze says
+come back to me on this date. Snoozed items keep a home in the board's **Snoozed**
+group, so nothing disappears.
+
 ## Getting the candidate set
 
 **Do not re-derive staleness.** Ask the Query:
@@ -213,6 +221,10 @@ Same tone rule, and it matters more here: a project has been quiet for weeks by
 definition, so "this hasn't moved since <date>" is the whole message. Never
 imply the user dropped it. A project is often quiet for a good reason the ledger
 cannot see, so offer the snooze (`project-set --snooze`) as readily as the chase.
+That is the **project** snooze: it quiets this rollup and leaves the members
+surfacing on their own. To park an individual member, snooze the promise instead
+(`snooze --id <promise-id>`). Say which one you are offering; the two read alike
+at the command line and do opposite things.
 A project carrying a check-in rhythm reports `due-for-check-in` instead of
 `quiet`; treat it the same way and route the reset through the `projects` skill.
 

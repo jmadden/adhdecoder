@@ -44,8 +44,12 @@ Get the promise set via the `ledger` skill's **Query**, so any backend works
 companion). Query already recomputes `overdue`/`stakes`, overlays `itemMeta`, and
 exposes `snoozedUntil`. On the active tabs (Board / Waiting / Tomorrow):
 
-- skip items whose `snoozedUntil` is in the future,
-- skip `dismissedFromBoard` ids.
+- skip items whose `snoozedUntil` is in the future — but list them in the
+  Board tab's **Snoozed** group (§3). Skipping them from the *work* surfaces is
+  the point of a snooze; dropping them from the page entirely would make snooze
+  an invisible off-switch, the failure `parseError` and the stored
+  `frontmatterWarning` were each deprecated for.
+- skip `dismissedFromBoard` ids. These get no group: a dismissal means gone.
 
 Closed items still appear in **Shipped** and **History** regardless of snooze.
 
@@ -76,17 +80,18 @@ from the ledger + config.
 
 | Tab (pane) | Card | Contents |
 |---|---|---|
-| **Board / Today** (`#pane-board`) | `.big` in `.today-group` / `.today-grid` | Open promises actionable now, grouped into up-to-four labeled color sections (below), each a 2-column grid. Leads with **Ready to close**. |
+| **Board / Today** (`#pane-board`) | `.big` in `.today-group` / `.today-grid` | Open promises actionable now, grouped into up-to-four labeled color sections (below), each a 2-column grid. Leads with **Ready to close**, and closes with the collapsed **Snoozed** group when anything is parked. |
 | **Waiting on Others** (`#pane-waiting .waitlist`) | `.waitrow` | Open `they-owe-me` promises. |
 | **Shipped** (`#pane-shipped .wins`) | `.win` | `met` / `cleared` recently. |
 | **Tomorrow's Headlines** (`#pane-tomorrow .today`) | `.big` | Due-soon / scheduled-ahead upcoming items (not yet actionable today). |
 | **Projects** (`#pane-projects .projlist`) | `.proj` | Declared projects (`state.json` `projects`), lagging first, then a **Closed** section for `status: done`. Each card carries the user's own sentence, then the rules that implement it (so a lossy translation is visible), then every member **with the reason it matched**, then an **Excluded** block with its undo command. |
 | **History** (`#pane-history .histlist`) | `.hist` | All `met` / `cleared`, newest first. |
 
-**Board / Today state color** (the template's `.big` variants). The four states
-render as **separate stacked sections**, each a `.today-group` (label + colored
-dot) wrapping a 2-column `.today-grid`. Fixed order top to bottom; **omit any
-section that has no items entirely**:
+**Board / Today state color** (the template's `.big` variants). The four active
+states render as **separate stacked sections**, each a `.today-group` (label +
+colored dot) wrapping a 2-column `.today-grid`, followed by the **Snoozed** group
+described after them. Fixed order top to bottom; **omit any section that has no
+items entirely**:
 
 1. **teal** (`.big.ready`) = **ready to close** — the record still reads open,
    but the source says it is done: `verifyStatus` is `resolved`, or `itemMeta`
@@ -97,6 +102,22 @@ section that has no items entirely**:
 3. **purple** (`.big.waiting`) = **waiting, no clear action** — open but the ball
    is elsewhere / blocked.
 4. **green** (`.big.done`) = **done today** — closed today, shown for the win.
+
+**Snoozed** — a fifth section, but deliberately not a fifth colour. Open items
+whose `snoozedUntil` is in the future render **after** the four groups as a single
+collapsed `<details class="hist">` labelled `Snoozed (N)`, one line each: title,
+the grey `snoozed to <date>` chip (the same chip a snoozed project card carries),
+and `snoozeReason`. Sorted by `(snoozedUntil, id)`, soonest to return first.
+Omitted entirely when nothing is snoozed — no permanent `Snoozed (0)` zero-state.
+Cards would be wrong here: a deliberately parked item rendered as loudly as live
+work is the false-urgency problem inverted. Close the block with the undo command,
+as the Projects tab does for its Excluded list.
+
+A snoozed item appears **exactly once on the Board tab** — here, and in none of the
+four groups — and on none of the Waiting / Tomorrow / Shipped tabs. It still appears
+on the **Projects** tab if it is a member of a declared project: a snoozed member
+still counts toward its project (`reference/projects.md`), and a promise snooze
+quiets the promise, never the project's arithmetic.
 
 **Ready to close comes first, and it is not optional.** A `resolved` item whose
 record still reads open is the single most trust-destroying thing the board can
@@ -152,7 +173,24 @@ staleness, not as a hard flag.
 | `{{N_PROJECTS}}` | count of declared projects (all of them, not just lagging). |
 | `{{BOARD_NOTE}}` | one-line status for the `.calm` banner — a calm "nothing slipping" when the board is clear, else a short "N items need your move" summary. |
 
-The Board tab button has no badge in the template — none is needed.
+The Board tab button has no badge in the template — none is needed. `Snoozed`
+deliberately gets no `{{COUNTS}}` clause either: the headline stays about work.
+
+### The stdout recap
+
+`render-board.py` also prints a one-line recap unless `--quiet`, which is the
+only place a scheduled run reports what it rendered. Spec'd here because a count
+that lives only in code drifts silently. Exact form, all counts always present:
+
+```
+ready-to-close N | your-move N | waiting-group N | done-today N | waiting-tab N |
+tomorrow N | shipped N | history N | projects N (N lagging) | parse-failures N |
+snoozed N
+```
+
+(one physical line), then one indented detail line per parse failure, frontmatter
+warning, snoozed item, lagging project and deduped record, then `board: <path>`.
+Adding a group means adding its count here in the same change.
 
 ### 5. Emit the cards (per the template's CARD TEMPLATES)
 

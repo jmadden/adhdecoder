@@ -82,15 +82,45 @@ def run(config_path, extra=()):
     return result.stdout
 
 
+def pane_block(html, pane_id):
+    """Slice out one tab pane, for "it is not on THAT tab" assertions."""
+    start = html.find('id="%s"' % pane_id)
+    if start < 0:
+        return ""
+    start = html.rfind("<div", 0, start)
+    end = html.find('<div class="pane', start + 1)
+    return html[start:end if end > 0 else len(html)]
+
+
+def snoozed_block(html):
+    """Slice out the collapsed Snoozed group on the Board tab."""
+    start = html.find('<summary><span class="htitle">Snoozed (')
+    if start < 0:
+        return ""
+    start = html.rfind("<details", 0, start)
+    return html[start:html.find("</details>", start) + len("</details>")]
+
+
 def group_block(html, label):
-    """Slice out one .today-group by its label, for group-scoped assertions."""
+    """Slice out one .today-group by its label, for group-scoped assertions.
+
+    Ends at the next .today-group OR at the collapsed Snoozed block, whichever
+    comes first. Without the second terminator the LAST group runs to the end of
+    the document and swallows anything rendered after it, so "not in the Done
+    today group" silently became "not on the rest of the page".
+    """
     marker = "</span> %s</div>" % label
     start = html.find(marker)
     if start < 0:
         return ""
     start = html.rfind('<div class="today-group">', 0, start)
-    end = html.find('<div class="today-group">', start + 1)
-    return html[start:end if end > 0 else len(html)]
+    ends = [
+        pos for pos in (
+            html.find('<div class="today-group">', start + 1),
+            html.find('<summary><span class="htitle">Snoozed (', start + 1),
+        ) if pos > 0
+    ]
+    return html[start:min(ends) if ends else len(html)]
 
 
 def check_pronoun_matching():
@@ -305,9 +335,45 @@ def main():
         )
 
         # --- suppression ---------------------------------------------------
+        # A snooze must remove an item from the WORK surfaces without removing it
+        # from the board altogether. `not in html` was the old assertion, and it
+        # was too strong: it passed for a writer-less snooze and would equally
+        # have passed for a snooze that vanished the item entirely, which is the
+        # invisible-off-switch bug. Assert placement, not absence.
+        eta = "Answer the Eta capacity question"
+        for label in ("Ready to close (confirm)", "Your move",
+                      "Waiting, no clear action", "Done today"):
+            check(
+                eta not in group_block(html, label),
+                "a snoozed item is not in the %r group" % label,
+            )
+        for pane in ("pane-waiting", "pane-tomorrow", "pane-shipped"):
+            check(
+                eta not in pane_block(html, pane),
+                "a snoozed item is not on the %s tab" % pane,
+            )
+        parked = snoozed_block(html)
         check(
-            "Answer the Eta capacity question" not in html,
-            "a future snoozedUntil item is excluded from the active tabs",
+            eta in parked and "Snoozed (1)" in parked,
+            "a snoozed item renders in the collapsed Snoozed group, with a count",
+        )
+        check(
+            "snoozed to 2026-08-20" in parked
+            and "parked pending the Eta capacity numbers" in parked,
+            "the Snoozed group carries the return date and the reason",
+        )
+        # scoped to the Board tab on purpose: a snoozed promise that belongs to a
+        # declared project still appears on the Projects tab, because a snoozed
+        # member still counts toward its project (reference/projects.md). The
+        # promise snooze quiets the promise, never the project's arithmetic.
+        board_pane = pane_block(html, "pane-board")
+        check(
+            board_pane.count(eta) == 1,
+            "a snoozed item appears exactly once on the Board tab",
+        )
+        check(
+            "| snoozed 1" in stdout and "snoozed: %s" % eta in stdout,
+            "the recap counts the snooze and names it",
         )
         check(
             "Configure the Zeta test tenant" not in html,

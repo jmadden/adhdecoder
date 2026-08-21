@@ -82,9 +82,10 @@ plus the minimum needed to track and dedup. Everything else it references via
   existence had a `projects` array, so nothing was ever written against the
   narrower vocabulary, and `validate_project()` refuses unknown fields so an
   older plugin reports rather than misreads.
-- **itemMeta** — `{ "<id>": { snoozedUntil, deadlineType, deadlineTypeReason,
-  verifyStatus, verifyReason, lastVerified, source, noteOnly, dismissedFromBoard,
-  frontmatterWarning, markMetDraft, updateDraft, appliedMarkMet } }`. Overlay
+- **itemMeta** — `{ "<id>": { snoozedUntil, snoozeReason, deadlineType,
+  deadlineTypeReason, verifyStatus, verifyReason, lastVerified, source, noteOnly,
+  dismissedFromBoard, frontmatterWarning, markMetDraft, updateDraft,
+  appliedMarkMet } }`. Overlay
   store for items whose canonical record is
   read-only (a read-only backend), incl. a reconcile-enriched `source` (and
   `noteOnly` cleared) for such a note. Builtin promises keep these on the
@@ -121,6 +122,12 @@ work as open.
   whenever a run overrides `deadlineType`, because an unexplained override looks
   like the system losing a deadline. The board renders it on the card for any
   item whose date is soft.
+- **snoozeReason** — why a promise was parked, in the user's words ("on hold
+  pending the de-dup check"). Required by the `snooze` op, never optional, for
+  the same reason `reason` is required on `suppressed[]`: an unexplained hold is
+  indistinguishable from a bug three weeks later. On a record it accompanies a
+  history line; on an overlay entry there is no history, so this **is** the audit
+  trail. The board renders it on the Snoozed group's line for the item.
 - **frontmatterWarning** — a lint on a record that **parsed**: a non-canonical
   value, a duplicate key. Surfaced in the board note beside parse failures.
   Distinct from a parse *failure*, which makes a record invisible.
@@ -231,7 +238,16 @@ it is a place where a correction goes to die.
   staleness only.
 - **snoozedUntil** — ISO date or null. Temporary per-item dismiss; the record is
   kept, never deleted. Distinct from `dismissedFromBoard` (permanent). While in
-  the future, consumers do not surface the item as a chase.
+  the future, consumers do not surface the item as a chase, but the board still
+  lists it under **Snoozed** — a hold nothing displays is an invisible
+  off-switch, not a record.
+  **The writer is `snooze`, not `enrich`.** `enrich` never touches the field, and
+  cannot reach a note-backed id at all (it walks `state.json` promises only), so
+  `snooze` routes through `_route()`: a builtin promise snoozes on the record with
+  a history line, a note-backed one in the `itemMeta` companion, and no note is
+  written in either write mode. `project-set --snooze` is a different thing
+  entirely: it quiets a project's rollup and deliberately leaves its members
+  surfacing (`reference/projects.md`).
 - **driftClearedUntil** — ISO 8601 cooldown after a "handled offline" clear.
 - **note** — string or null. The **latest-state** summary in plain language: what
   is currently true about this promise ("X emailed on the 5th still waiting on Y,

@@ -152,8 +152,11 @@ When a promise carries a `why`, use it in the nudge to make the stakes concrete
 drives to confirmation (`owner` = counterparty, `what` = "confirm/complete X",
 `why` = what it unblocks); it surfaces via the they-owe path above. For each,
 also offer **"no follow-up needed this time"** -> hand off to the `ledger`
-skill's **Set snooze** (record kept, never deleted), which drops it from the
-board until the snooze date. See `reference/handoff-followups.md`.
+skill's **Set snooze** (`snooze --id <id> --until <date> --reason "<why>"`, record
+kept, never deleted), which drops it off the chase until the snooze date. Ask for
+the reason rather than inventing one: it is required, and on a note-backed record
+it is the only audit trail. The item stays visible in the board's **Snoozed**
+group. See `reference/handoff-followups.md`.
 
 ## The board (output)
 

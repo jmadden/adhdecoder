@@ -63,6 +63,11 @@ The recap's parse-failure lines and the `{{BOARD_NOTE}}` line are the only place
 malformed note or a parked draft becomes visible. Relay them; never drop them
 because the board "rendered fine."
 
+Relay the `snoozed N` count the same way, and its per-item lines. Snoozed promises
+are the only ones deliberately kept off the work groups, so the count is the one
+signal that a pile is building - and a snooze that has quietly outlived its reason
+is work the user thinks is handled. If any are past due to return, say so.
+
 ## First run
 
 If config is absent or thin (no backend + identity), do not invent paths - route

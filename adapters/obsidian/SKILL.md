@@ -198,9 +198,9 @@ in the conversation** - never from a sweep or a non-interactive `daily-run`:
   instead of some future session finding it by accident.
 - Atomic write (write temp, replace). One file per operation.
 - Write only TaskNotes-canonical fields into the note. ADHDecoder-owned
-  metadata (`snoozedUntil`, `deadlineType` override, verify results, enriched
-  source links) STAYS in the `itemMeta` companion even in readwrite - notes
-  hold task truth, not decoder bookkeeping.
+  metadata (`snoozedUntil` + `snoozeReason`, `deadlineType` override, verify
+  results, enriched source links) STAYS in the `itemMeta` companion even in
+  readwrite - notes hold task truth, not decoder bookkeeping.
 - Never rename or move a note (the file path is the promise id).
 - Never delete; `done` + `completedDate` is the close.
 - Non-interactive runs never write a note, regardless of mode.

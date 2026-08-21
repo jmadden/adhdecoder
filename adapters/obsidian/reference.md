@@ -230,9 +230,9 @@ any mode.
 
 Hard rules: real-YAML round-trip preserving unknown keys and the body verbatim
 (except the appended line); atomic write; never rename/move (path = id); never
-delete; TaskNotes-canonical fields only - `snoozedUntil`, `deadlineType`
-override, verify metadata, enriched source links STAY in the `itemMeta`
-companion even in readwrite.
+delete; TaskNotes-canonical fields only - `snoozedUntil` + `snoozeReason`,
+`deadlineType` override, verify metadata, enriched source links STAY in the
+`itemMeta` companion even in readwrite.
 
 **`projects` as wikilinks (fix, 2026-08-17).** `scripts/ledger_write.py`'s
 `capture` and `promote` write whatever string `--project` is given straight

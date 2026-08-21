@@ -305,6 +305,167 @@ def main():
             "trail cannot be quietly reopened",
         )
 
+        # --- snooze: a hold the user set, on either backend --------------------
+        # The whole point is that a snooze reaches a note-backed record WITHOUT
+        # writing the note. `enrich` cannot (it walks state["promises"] only) and
+        # `project-set --snooze` quiets a project rollup, not its members - which
+        # is why the only route used to be hand-editing state.json.
+        state_id = "ISSUE-789:acme-invoice-answer"
+        note_id = "Tasks/Provide the Omicron domain list.md"
+        note_mtimes = {p: p.stat().st_mtime_ns
+                       for p in sorted((tmp / "vault").rglob("*.md"))}
+
+        result = run(config_path, ["snooze", "--id", state_id,
+                                   "--until", "2026-08-24", "--reason", "waiting on legal"])
+        state = json.loads(state_path.read_text())
+        record = next(p for p in state["promises"] if p["id"] == state_id)
+        check(
+            result.returncode == 0 and "-> record" in result.stdout,
+            "a state.json promise snoozes on the record",
+        )
+        check(
+            record["snoozedUntil"] == "2026-08-24"
+            and record["snoozeReason"] == "waiting on legal",
+            "...with both the date and the reason stored",
+        )
+        check(
+            record["history"][-1]["note"] == "snoozed until 2026-08-24 - waiting on legal",
+            "...and leaves a history line, so it counts as the user moving it",
+        )
+
+        result = run(config_path, ["snooze", "--id", note_id,
+                                   "--until", "2026-08-24", "--reason", "de-dup check first"])
+        state = json.loads(state_path.read_text())
+        check(
+            result.returncode == 0 and "-> itemMeta" in result.stdout,
+            "a note-backed id snoozes in the itemMeta companion",
+        )
+        check(
+            state["itemMeta"][note_id]["snoozedUntil"] == "2026-08-24"
+            and state["itemMeta"][note_id]["snoozeReason"] == "de-dup check first",
+            "...with the reason, which is the only audit trail an overlay has",
+        )
+        check(
+            {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
+            == note_mtimes,
+            "NO note file was written by a snooze - it is decoder bookkeeping, "
+            "not task truth",
+        )
+
+        # the reader must agree, or the writer wrote somewhere nothing looks
+        probe = subprocess.run(
+            [sys.executable, str(QUERY), "--config", str(config_path), "--now", NOW,
+             "--select", "snoozed", "--json"],
+            capture_output=True, text=True,
+        )
+        snoozed_ids = {p["id"] for p in json.loads(probe.stdout)["promises"]}
+        check(
+            {state_id, note_id} <= snoozed_ids,
+            "the Query's `snoozed` selector reports both, so writer and reader agree",
+        )
+
+        # --- unsnooze, both routes ---------------------------------------------
+        run(config_path, ["snooze", "--id", note_id, "--unsnooze"])
+        state = json.loads(state_path.read_text())
+        check(
+            "snoozedUntil" not in state["itemMeta"].get(note_id, {})
+            and "snoozeReason" not in state["itemMeta"].get(note_id, {}),
+            "unsnooze DELETES the overlay keys rather than nulling them - the "
+            "Query skips a null overlay value, so a null would be dead weight",
+        )
+
+        # an entry that existed only to hold the snooze is an orphan
+        # deliberately an id with NO pre-existing overlay entry, so the entry
+        # under test is one the snooze itself created
+        orphan_id = "Tasks/Provide the Mu quarterly summary.md"
+        run(config_path, ["snooze", "--id", orphan_id,
+                          "--until", "2026-08-24", "--reason", "parked"])
+        run(config_path, ["snooze", "--id", orphan_id, "--unsnooze"])
+        state = json.loads(state_path.read_text())
+        check(
+            orphan_id not in state["itemMeta"],
+            "an itemMeta entry holding only a cleared snooze is pruned, not left "
+            "behind as an orphan",
+        )
+
+        # THE silent-no-op case: a state.json record that ALSO carries an overlay
+        # snooze. The Query overlays itemMeta ON TOP of the record, so clearing
+        # only the record leaves the item still snoozed while the op reports
+        # success.
+        state = json.loads(state_path.read_text())
+        state.setdefault("itemMeta", {}).setdefault(state_id, {})["snoozedUntil"] = "2026-09-30"
+        state_path.write_text(json.dumps(state, indent=2))
+        result = run(config_path, ["snooze", "--id", state_id, "--unsnooze"])
+        state = json.loads(state_path.read_text())
+        record = next(p for p in state["promises"] if p["id"] == state_id)
+        check(
+            record["snoozedUntil"] is None
+            and "snoozedUntil" not in state["itemMeta"].get(state_id, {}),
+            "unsnoozing a record ALSO clears a competing itemMeta value, or the "
+            "overlay would re-apply over the None and nothing would change",
+        )
+        probe = subprocess.run(
+            [sys.executable, str(QUERY), "--config", str(config_path), "--now", NOW,
+             "--select", "snoozed", "--json"],
+            capture_output=True, text=True,
+        )
+        check(
+            state_id not in {p["id"] for p in json.loads(probe.stdout)["promises"]},
+            "...and the Query agrees it is awake again",
+        )
+
+        # --- snooze refusals ----------------------------------------------------
+        before_bytes = state_path.read_bytes()
+        result = run(config_path, ["snooze", "--id", state_id,
+                                   "--until", "2020-01-01", "--reason", "late"])
+        check(
+            result.returncode == 1 and "not in the future" in result.stderr,
+            "a snooze date in the past is refused - it would read as an applied "
+            "off-switch while changing nothing",
+        )
+        result = run(config_path, ["snooze", "--id", state_id,
+                                   "--until", "next tuesday", "--reason", "vague"])
+        check(
+            result.returncode == 1 and "expects YYYY-MM-DD" in result.stderr,
+            "a malformed date is refused HERE, because the itemMeta branch has no "
+            "schema gate on the write path to catch it later",
+        )
+        result = run(config_path, ["snooze", "--id", state_id, "--until", "2026-08-24"])
+        check(
+            result.returncode == 1 and "requires --reason" in result.stderr,
+            "a snooze with no reason is refused; an unexplained hold is "
+            "indistinguishable from a bug three weeks later",
+        )
+        result = run(config_path, ["snooze", "--id", "Tasks/Not a real note.md",
+                                   "--until", "2026-08-24", "--reason", "x"])
+        check(
+            result.returncode == 1 and "Query cannot see" in result.stderr,
+            "an unknown id is refused rather than creating an orphaned overlay entry",
+        )
+        result = run(config_path, ["snooze", "--id", "ISSUE-321:kappa-handover",
+                                   "--until", "2026-08-24", "--reason", "x"])
+        check(
+            result.returncode == 1 and "not open" in result.stderr,
+            "snoozing a closed promise is refused - it is a no-op that looks like "
+            "success",
+        )
+        check(
+            state_path.read_bytes() == before_bytes,
+            "every refused snooze left the ledger byte-identical",
+        )
+        result = run(config_path, ["--dry-run", "snooze", "--id", state_id,
+                                   "--until", "2026-08-24", "--reason", "later"])
+        check(
+            result.returncode == 0 and "DRY RUN" in result.stdout
+            and state_path.read_bytes() == before_bytes,
+            "--dry-run reports and writes nothing",
+        )
+        check(
+            {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
+            == note_mtimes,
+            "not one note was touched across the whole snooze block",
+        )
+
         # --- capture: create a task note where the user works -------------------
         vault_tasks = tmp / "vault" / "Tasks"
         before_count = len(list(vault_tasks.glob("*.md")))

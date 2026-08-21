@@ -126,11 +126,24 @@ received) or `--status cleared` (handled outside the system). Never delete a
 record. For a record ADHDecoder cannot write (a read-only note), park a
 `draft-mark-met` instead, which the board renders in **Ready to close**.
 
-**Set snooze.** Set `snoozedUntil` to a date (temporary per-item dismiss). The
+**Set snooze.** Park a promise until a date (temporary per-item dismiss). The
 record is **kept, never deleted** - this is distinct from `dismissedFromBoard`
-(permanent). Append a history line. Builtin -> write it on the record; a read-only backend
--> write it to `itemMeta[<id>]`, never the note. "Unsnooze" clears it the same
-way.
+(permanent).
+
+```
+ledger_write.py --config <cfg> snooze --id <id> --until YYYY-MM-DD --reason "<why>"
+ledger_write.py --config <cfg> snooze --id <id> --unsnooze
+```
+
+`snooze` is the writer, **not `enrich`** - `enrich` never touches the field and
+cannot reach a note-backed id at all. The op routes itself: builtin -> the record,
+plus a history line; a read-only backend -> `itemMeta[<id>]`, never the note, in
+either write mode. `--reason` is required, because on an overlay there is no
+history and the reason is the only audit trail. The board lists everything snoozed
+in a collapsed **Snoozed (N)** group, so a hold stays reviewable.
+
+Do not confuse this with `project-set --snooze <project-id>`, which quiets a
+project's rollup and deliberately leaves its members surfacing.
 
 **Mark ongoing (set deadlineType).** Set `deadlineType` to `soft`/`none` (ongoing,
 no date-chasing) or back to `hard`. Builtin -> on the record; a read-only backend ->

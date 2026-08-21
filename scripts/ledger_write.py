@@ -38,6 +38,8 @@ Usage:
     ledger_write.py --config CFG record-verify --id ID --status S [--reason R]
                                                 [--source-url URL]
     ledger_write.py --config CFG draft-mark-met --id ID --reason R
+    ledger_write.py --config CFG snooze --id ID --until YYYY-MM-DD --reason R
+    ledger_write.py --config CFG snooze --id ID --unsnooze
     ledger_write.py --config CFG record-sweep   [--sources-json JSON] [--now ISO]
     ledger_write.py --config CFG mark-seen --id ID [--id ID ...]
 
@@ -631,6 +633,155 @@ def op_draft_mark_met(args, config, now):
     return 0
 
 
+def _clear_overlay_snooze(state, promise_id):
+    """Strip the snooze keys from the `itemMeta` companion, pruning an emptied entry.
+
+    Called on BOTH branches, which is not symmetry for its own sake. On the
+    itemMeta branch this IS the unsnooze. On the record branch it is what makes
+    an unsnooze take effect at all: the Query overlays `itemMeta` ON TOP of the
+    record, so a record whose `snoozedUntil` was set to None while a stale
+    overlay value survived still reads as snoozed - the op reports success and
+    changes nothing.
+
+    An entry left holding only a cleared snooze is an orphan, which is how stale
+    overlay records accumulate (`reference/ledger-schema.md`), so an emptied one
+    is removed. This is the only place in this file that deletes an itemMeta key.
+    """
+    item_meta = state.get("itemMeta") or {}
+    entry = item_meta.get(promise_id)
+    if not isinstance(entry, dict):
+        return
+    for field in ("snoozedUntil", "snoozeReason"):
+        entry.pop(field, None)
+    if not entry:
+        del item_meta[promise_id]
+
+
+def op_snooze(args, config, now):
+    """Park a promise until a date: still owed, deliberately quiet until then.
+
+    `snoozedUntil` was readable everywhere at promise level and writable nowhere.
+    The Query overlays it, derives `_snoozed`, suppresses on it and serves a
+    `snoozed` selector - but the only writer was `project-set`, which quiets a
+    project's ROLLUP and deliberately leaves its members surfacing
+    (`reference/projects.md`). That left hand-editing `state.json` as the only
+    route, the one write method the schema doc names as the source of every
+    stale overlay entry in the wild.
+
+    Routed through `_route`, so a note-backed record snoozes in the `itemMeta`
+    companion and NO note is written in any write mode: a snooze is
+    ADHDecoder-owned bookkeeping, not task truth, and stays in the companion even
+    post-cutover (`adapters/obsidian/reference.md`).
+
+    History is appended on the record branch only - `ITEM_META` has no `history`
+    field, so on the overlay branch `snoozeReason` IS the audit trail. That
+    asymmetry is why --reason is required rather than optional.
+    """
+    if not args.unsnooze:
+        if not args.until:
+            raise Refused(
+                "snooze needs --until YYYY-MM-DD, or --unsnooze to clear an existing one"
+            )
+        if not args.reason:
+            raise Refused(
+                "`snooze` requires --reason: an unexplained hold is indistinguishable "
+                "from a bug three weeks later, and on a note-backed record the reason "
+                "is the only audit trail there is"
+            )
+        # checked explicitly rather than left to a downstream validator the way
+        # `project-set` leaves it: the itemMeta branch has NO schema gate on the
+        # write path (`validate_state` only type-checks the container, never the
+        # entries), so a malformed date there would be written successfully and
+        # surface days later as a `doctor` gap
+        until = lq.as_date(args.until)
+        if not until:
+            raise Refused("--until expects YYYY-MM-DD, got %r" % args.until)
+        if until <= now.date():
+            raise Refused(
+                "--until %s is not in the future; it would read as an applied "
+                "off-switch while changing nothing." % args.until
+            )
+
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    # checked BEFORE _route, because _route's itemMeta branch creates an empty
+    # entry as a side effect of asking the question, and an overlay entry for an
+    # id the Query cannot see is exactly how orphaned records accumulate
+    match = None
+    for promise in existing_union(config, now):
+        if promise.get("id") == args.id:
+            match = promise
+            break
+    if match is None:
+        raise Refused(
+            "no promise or note with id %r - refusing to snooze something the "
+            "Query cannot see" % args.id
+        )
+    if not match.get("_open"):
+        raise Refused(
+            "%r is `%s`, not open. Snoozing a closed promise is a no-op that "
+            "looks like success." % (args.id, match.get("status"))
+        )
+
+    where, target = _route(state, args.id)
+    # snapshotted BEFORE the mutation, because this has to be a delta check for
+    # the same reason commit() is one: a real ledger carries legacy baggage (a
+    # pre-schema `createdAt`, say), and an absolute gate would refuse to snooze
+    # exactly the old records most likely to need parking
+    record_problems_before = (
+        validate_promise(target, enforce_reality_gate=False) if where == "record" else []
+    )
+
+    if args.unsnooze:
+        if where == "record":
+            target["snoozedUntil"] = None
+            target["snoozeReason"] = None
+        _clear_overlay_snooze(state, args.id)
+        line = "snooze cleared"
+        said = "cleared the snooze on"
+    else:
+        if where == "record":
+            target["snoozedUntil"] = args.until
+            target["snoozeReason"] = args.reason
+            # a stale overlay date would shadow the one just written
+            _clear_overlay_snooze(state, args.id)
+        else:
+            target["snoozedUntil"] = args.until
+            target["snoozeReason"] = args.reason
+        line = "snoozed until %s - %s" % (args.until, args.reason)
+        said = "snoozed"
+
+    if where == "record":
+        # a snooze is a human moving this, so it leaves history and counts as
+        # movement; `lastVerified` is deliberately NOT bumped - that field means
+        # "when the system last looked" (see last_touched() in ledger_query.py)
+        history_before = list(target.get("history") or [])
+        target["history"] = history_before + [
+            {"ts": now.isoformat(timespec="seconds"), "note": line}
+        ]
+        if target["history"][: len(history_before)] != history_before:
+            raise Refused("internal error: history would not be append-only; refusing")
+
+        introduced = [
+            problem for problem in validate_promise(target, enforce_reality_gate=False)
+            if problem not in record_problems_before
+        ]
+        if introduced:
+            raise Refused("refusing to snooze %r:\n  %s"
+                          % (args.id, "\n  ".join(introduced)))
+
+    if args.dry_run:
+        print("DRY RUN: would have %s %s (%s)" % (said, args.id, where))
+        return 0
+
+    backup_path = backup(config.state_file, config.instance_path)
+    commit(config.state_file, state, before, backup_path, problems_before)
+    print("%s %s -> %s" % (said, args.id, where))
+    return 0
+
+
 def _fields_from(args, now):
     stamp = now.isoformat(timespec="seconds")
     return {
@@ -956,6 +1107,7 @@ OPS = {
     "enrich": op_enrich,
     "record-verify": op_record_verify,
     "draft-mark-met": op_draft_mark_met,
+    "snooze": op_snooze,
     "record-sweep": op_record_sweep,
     "mark-seen": op_mark_seen,
 }
@@ -1015,6 +1167,13 @@ def main(argv=None):
     p_draft.add_argument("--id", required=True)
     p_draft.add_argument("--reason", required=True)
     p_draft.add_argument("--completed-date", default=None)
+
+    p_snooze = sub.add_parser(
+        "snooze", help="park a promise until a date, or clear an existing snooze")
+    p_snooze.add_argument("--id", required=True)
+    p_snooze.add_argument("--until", default=None, help="quiet until YYYY-MM-DD")
+    p_snooze.add_argument("--reason", default=None, help="required unless --unsnooze")
+    p_snooze.add_argument("--unsnooze", action="store_true")
 
     p_sweep = sub.add_parser("record-sweep", help="stamp lastSwept + append a sweepLog entry")
     p_sweep.add_argument("--sources-json", default=None, help="JSON {source: result}; stdin if omitted")

@@ -205,7 +205,8 @@
       "verifyStatus": "verified-open",
       "verifyReason": "Open, snoozed by the user.",
       "lastVerified": "2026-08-11T10:00:00-07:00",
-      "snoozedUntil": "2026-08-20"
+      "snoozedUntil": "2026-08-20",
+      "snoozeReason": "parked pending the Eta capacity numbers"
     },
     "Tasks/Configure the Zeta test tenant.md": {
       "verifyStatus": "verified-open",

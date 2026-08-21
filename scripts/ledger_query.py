@@ -361,6 +361,7 @@ def read_notes(config):
                 "why": None,
                 "deadlineType": deadline_type,
                 "snoozedUntil": None,
+                "snoozeReason": None,
                 "history": history,
                 # everything this function can catch by reading the note fresh;
                 # never a silent success, and never allowed to go stale (see
@@ -701,8 +702,8 @@ def last_touched(promise):
     """When a HUMAN last moved this one promise, or None.
 
     The single definition of movement in this file: a close, a note the user
-    edited, a logged update (`history` is only appended by `enrich`, which
-    requires a note), or the item arriving. `last_movement()` is this maxed over a
+    edited, a logged update (`history` is only appended by `enrich` and `snooze`,
+    both of which require a reason), or the item arriving. `last_movement()` is this maxed over a
     project's members - one idea, two scopes, so they cannot drift apart.
 
     **`lastVerified` is deliberately excluded.** It records when the system last
@@ -896,7 +897,7 @@ def query(config, now):
         meta = item_meta.get(promise["id"]) or {}
         for field in (
             "verifyStatus", "verifyReason", "lastVerified", "snoozedUntil",
-            "deadlineType", "deadlineTypeReason", "why", "noteOnly",
+            "snoozeReason", "deadlineType", "deadlineTypeReason", "why", "noteOnly",
             "markMetDraft", "updateDraft", "appliedMarkMet",
         ):
             if field in meta and meta[field] is not None:
@@ -1373,6 +1374,14 @@ def main(argv=None):
             flags.append("%d business days untouched" % promise["_staleDays"])
         if promise["_readyToClose"]:
             flags.append("ready to close")
+        if promise["_snoozed"]:
+            # the reason too, not just the date: on a note-backed record it is
+            # the only audit trail the snooze has, and a hold whose reason is
+            # invisible here is one a reader will assume is a bug
+            flags.append("snoozed to %s%s" % (
+                promise.get("snoozedUntil"),
+                " - %s" % promise["snoozeReason"] if promise.get("snoozeReason") else "",
+            ))
         owner = promise.get("owner") or "unknown"
         if promise.get("_pronouns"):
             name, sep, rest = owner.partition(" (")
