@@ -185,12 +185,19 @@ that lives only in code drifts silently. Exact form, all counts always present:
 ```
 ready-to-close N | your-move N | waiting-group N | done-today N | waiting-tab N |
 tomorrow N | shipped N | history N | projects N (N lagging) | parse-failures N |
-snoozed N
+snoozed N | suppressed N
 ```
 
 (one physical line), then one indented detail line per parse failure, frontmatter
 warning, snoozed item, lagging project and deduped record, then `board: <path>`.
 Adding a group means adding its count here in the same change.
+
+`suppressed N` is the odd one out and deliberately so: it counts
+`state["suppressed"]` — source refs the sweep must never raise — not a board
+group, and not the derived `_suppressed` the grouping above uses. It is here
+because that list previously surfaced only under `doctor`, so it could grow for
+weeks unseen. It gets **no** detail lines: the reasons are long, and reporting
+them is `doctor` check 7's job.
 
 ### 5. Emit the cards (per the template's CARD TEMPLATES)
 

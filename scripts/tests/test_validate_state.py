@@ -131,6 +131,27 @@ def main():
             any(f["key"] == "suppressed[1]" for f in probe_out["gaps"]),
             "a suppression with no reason reports as a gap",
         )
+        # The hole this closes: `validate_state` type-checks the `suppressed`
+        # container and never its entries, so before SUPPRESSED was declared an
+        # invented key was legal to write and invisible to `doctor`. That is
+        # exactly how a `ts` field reached a real ledger unnoticed.
+        invented = json.loads(FIXTURE.read_text())
+        invented["suppressed"].append({"ref": "ISSUE-002", "reason": "r",
+                                       "inventedSuppressionField": True})
+        probe2 = tmp / "probe2.json"
+        probe2.write_text(json.dumps(invented))
+        probe2_out = json.loads(run(probe2, ["--json"]).stdout)
+        check(
+            any(f["key"] == "inventedSuppressionField" and f["level"] == "suppressed"
+                for f in probe2_out["gaps"]),
+            "an undefined key on a suppression entry reports as a gap, so the next "
+            "invented field is caught by `doctor` rather than by a hand audit",
+        )
+        check(
+            not any(f["level"] == "suppressed" for f in as_json["gaps"]),
+            "...and the fixture's own well-formed entry is not flagged, nor is a "
+            "declared `ts`",
+        )
         check(
             any(f["key"] == "sweepLog[1]" for f in probe_out["notes"]),
             "a sweepLog entry with no ts reports as a note",

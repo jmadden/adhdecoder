@@ -74,9 +74,12 @@ That is the shared implementation of `reference/dashboard.md` - the same script
 the on-demand `board` skill calls. It is deterministic and offline (it never
 reaches a source and never reconciles), writes only `config.schedule.boardPath`,
 and prints a one-line recap of group counts plus any unparseable notes. Fold that
-recap into step 5's line, parse failures **and the `snoozed N` count** included.
-A scheduled run is where a growing pile of holds gets noticed: if any snooze has
-passed its return date, say so by name rather than letting the count absorb it.
+recap into step 5's line, parse failures **and the `snoozed N` and `suppressed N`
+counts** included. A scheduled run is where a growing pile of holds gets noticed:
+if any snooze has passed its return date, say so by name rather than letting the
+count absorb it. `suppressed N` is a different thing wearing the same word - source
+refs the sweep must never raise, not cards being hidden - so relay the count and
+leave the reasons to `doctor`.
 
 It writes to `config.schedule.boardPath`, overwriting in place; a visible file.
 Scheduled runs are non-interactive, so this is the durable place the user looks

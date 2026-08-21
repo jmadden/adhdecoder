@@ -48,13 +48,36 @@ plus the minimum needed to track and dedup. Everything else it references via
   A pending draft outranks a dismissal, so the board still renders a dismissed
   item in **Ready to close** (`reference/dashboard.md`) — dismissal means "stop
   showing me this as work", a draft is an unanswered question about the record.
-- **suppressed** — `{ ref, recordId, source, context, reason }` for source refs
-  the sweep must stop resurfacing at all (a dead lead, a self-created record, a
-  wrong-attribution hit). Distinct from `dismissedFromBoard`: that suppresses a
-  **promise** on the board, this suppresses a **source ref** at sweep time, so
-  no promise is created from it again. Append-only; `reason` is required, since
-  an unexplained suppression is indistinguishable from a bug. Surfaced by
-  `doctor`.
+- **suppressed** — `{ ref, reason, ts, recordId?, source?, context? }` for source
+  refs the sweep must stop resurfacing at all (a dead lead, a self-created record,
+  a wrong-attribution hit). `ref` and `reason` are always present; `ts` is set by
+  the writer and absent only on hand-written legacy entries; `recordId` is the
+  **source system's** record id, not a promise id. Distinct from
+  `dismissedFromBoard`: that suppresses a **promise** on the board, this
+  suppresses a **source ref** at sweep time, so no promise is created from it
+  again.
+  **Append-only, with exactly one exception:** `suppress --unsuppress` removes an
+  entry, and nothing else in the system may shorten this list. `reason` is
+  required, since an unexplained suppression is indistinguishable from a bug and a
+  ref nothing can justify silencing becomes permanent by default;
+  `validate-state.py` reports a reasonless entry as a gap, and any key outside the
+  set above as a gap too — the container-only type check is what let an
+  undeclared `ts` into a real ledger unnoticed.
+  **The writer is `suppress`**, and until it existed there was none: the field was
+  documented, schema-declared and doctor-validated with hand-editing `state.json`
+  as the only route, the one write method this document names as the source of
+  every stale entry in the wild. Unlike `snooze` it does **not** route through
+  `_route()` — a suppression is about a source ref, not per-promise metadata, so it
+  lives in one place whatever backend is active, and no note is written in any
+  write mode.
+  **The reader is `ledger_query.suppressed_source_refs()`**, surfaced as
+  `suppressedRefs` by `scripts/sweep_plan.py` and counted in the board recap.
+  Before that the list had no reader at all, so honouring it depended on a model
+  remembering the field existed. Reasons are surfaced by `doctor`.
+  Note the word is overloaded: `promise["_suppressed"]`, the emitted
+  `derived.suppressed`, and `--select suppressed` all mean the derived **board**
+  term ("do not render this card now"), which is a different concept at a
+  different layer.
 - **people** — `{ "<name>": { pronouns, note, recordedAt } }`. Facts about a
   person that ADHDecoder would otherwise get wrong, most importantly
   **pronouns**. **Any skill writing copy that refers to a person MUST read this

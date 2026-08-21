@@ -107,7 +107,9 @@ def group_promises(promises, now):
         if promise["_open"]:
             if promise["_suppressed"]:
                 # `_snoozed`, not `_suppressed`: the other term is a board
-                # dismissal, which is meant to stay gone. A snooze is a hold the
+                # dismissal, which is meant to stay gone. (Neither is
+                # `state["suppressed"]`, the sweep's list of source refs - see the
+                # recap in main().) A snooze is a hold the
                 # user set and must be able to review, so it gets a surface -
                 # a writer without one is the invisible off-switch that
                 # `parseError` and the stored `frontmatterWarning` were each
@@ -765,13 +767,20 @@ def main(argv=None):
         summary = (
             "ready-to-close %d | your-move %d | waiting-group %d | done-today %d | "
             "waiting-tab %d | tomorrow %d | shipped %d | history %d | "
-            "projects %d (%d lagging) | parse-failures %d | snoozed %d"
+            "projects %d (%d lagging) | parse-failures %d | snoozed %d | "
+            "suppressed %d"
             % (
                 len(board["ready"]), len(board["move"]), len(board["waiting"]),
                 len(board["done"]), len(waiting_tab), len(tomorrow), len(shipped),
                 len(history), len(rollups),
                 len([r for r in rollups if r["rollup"]["lag"]]), len(failures),
                 len(snoozed),
+                # `state["suppressed"]`, the source refs the sweep must not raise
+                # - NOT the derived `_suppressed` the grouping above uses. Counted
+                # here so a growing suppression list is visible every run instead
+                # of only when someone happens to run `doctor`. The reasons stay
+                # doctor's to report; a count is what a recap can carry.
+                len(lq.suppressed_source_refs(state)),
             )
         )
         print(summary)

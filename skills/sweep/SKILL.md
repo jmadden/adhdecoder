@@ -52,6 +52,14 @@ It returns `sweep` (ordered, each with the reason it is included) and `skip`
 Add `--scope every-run` for a light intra-day pass, `--scope all` to force
 everything.
 
+It also returns **`suppressedRefs`**: source refs that must never become a
+promise again. **Drop any candidate whose source ref matches one** - no promise,
+no enrich, no mention - matching case-folded and exact on the ref, nothing
+looser (`reference/sweep.md`). This is reported to you rather than remembered by
+you on purpose: the list previously had no reader, and a ref marked dead came
+back on a later run. To add one, `ledger_write.py suppress --ref REF --reason
+"<why>"`; never hand-edit `state.json`.
+
 The rule it enforces, which prose kept having to restate: **every enabled source
 is swept at least once per calendar day**, whatever its weight or cadence, so
 nothing is silently ignored. Per-source freshness comes from the `sweepLog`

@@ -49,9 +49,14 @@ scripts/ledger_write.py       THE write path. state.json ops (reality gate, sche
                               collapse). Note ops need --confirmed, so no
                               unattended run can create one. `snooze` parks a
                               promise (routed by _route, so a note-backed one
-                              parks in itemMeta and no note is ever written)
+                              parks in itemMeta and no note is ever written).
+                              `suppress` blocks a SOURCE ref from ever becoming a
+                              promise again: top-level list, NOT routed, reason
+                              required, append-only except --unsuppress
 scripts/sweep_plan.py         which sources a run sweeps (weight order, cadence,
-                              the once-per-day guarantee). Read-only arithmetic
+                              the once-per-day guarantee) and which source refs
+                              it must never raise (`suppressedRefs`, via
+                              ledger_query). Read-only arithmetic
 scripts/doctor_check.py       doctor's mechanical checks (config, backend, write
                               mode, record store). Reports connector presence as
                               `unchecked` rather than guessing: a subprocess
@@ -61,14 +66,17 @@ scripts/reconcile_plan.py     reconcile's TTL cache decision, working order, and
                               themselves stay prose: they need a live source
 scripts/ledger_query.py       THE ledger read: backend resolution, the union +
                               one-way dedup, itemMeta overlay, all derived state,
-                              and the selectors the read-side skills ask for.
-                              Read-only, no write path. Underscored (not
+                              and the selectors the read-side skills ask for,
+                              plus suppressed_source_refs() - the SOURCE-ref
+                              block list, not the derived board term of the same
+                              name. Read-only, no write path. Underscored (not
                               kebab-case) because it is the one importable module
 scripts/render-board.py       the board renderer; implements reference/dashboard.md
                               (pure: config + ledger + clock in, HTML out).
                               Imports ledger_query; owns only grouping + HTML
 scripts/validate-state.py     schema validator; reports undefined + deprecated
-                              fields at all three levels. Called by `doctor`.
+                              fields at every level the schema defines, including
+                              each `suppressed` entry. Called by `doctor`.
                               Validates, never repairs
 scripts/tests/                fixture test + invented fixture ledger. The fixture
                               state file is `fixtures/ledger/fixture-state.json`,

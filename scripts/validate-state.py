@@ -87,7 +87,22 @@ def collect(state):
                 meta_keys[key] += 1
     scan("itemMeta", meta_keys, "itemMeta entry")
 
-    counts = {"promise": promise_keys, "itemMeta": meta_keys}
+    # Aggregated the same way, and scanned at all rather than left to
+    # `check_suppressed`, because until now `suppressed` entries had no field
+    # gate anywhere: `ledger_schema.validate_state` type-checks the container
+    # only, so an undeclared key was legal to write and invisible to `doctor`.
+    # That is how a `ts` field reached a real ledger unnoticed.
+    suppressed_keys = {}
+    for entry in state.get("suppressed") or []:
+        if not isinstance(entry, dict):
+            continue
+        for key in entry:
+            suppressed_keys.setdefault(key, 0)
+            suppressed_keys[key] += 1
+    scan("suppressed", suppressed_keys, "suppressed entry")
+
+    counts = {"promise": promise_keys, "itemMeta": meta_keys,
+              "suppressed": suppressed_keys}
     for finding in gaps + notes:
         level = finding["level"]
         if level in counts:

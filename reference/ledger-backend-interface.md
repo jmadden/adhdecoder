@@ -80,6 +80,11 @@ See `reference/cutover.md` for the flip procedure and
   `reason` is required, not an optional note: on a read-only backend the overlay
   carries no history, so it is the only audit trail the snooze has. Implemented by
   `ledger_write.py snooze`; `--unsnooze` clears it.
+- **Not in this interface: suppressing a source ref.** `ledger_write.py suppress`
+  writes the top-level `state["suppressed"]` list, which is keyed by source ref
+  rather than by promise id and is not per-item metadata at all - so there is no
+  backend-scoped variant of it and no `setSuppressed(id, ...)` to implement. It
+  acts before a promise exists; every operation here acts on one that does.
 - **recordSourceLink(id, source)** — persist an enriched source link (same rule).
 - **write(promise) / update(promise)** — create or update a promise. Writable
   backends only; a read-only backend instead returns a draft/instruction and

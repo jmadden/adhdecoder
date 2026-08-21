@@ -146,8 +146,12 @@ def main():
         tmp = Path(raw_tmp)
         instance = tmp / "instance"
         instance.mkdir()
-        (instance / "state.json").write_text(json.dumps({"schemaVersion": 2, "promises": [],
-                                                         "sweepLog": []}))
+        (instance / "state.json").write_text(json.dumps({
+            "schemaVersion": 2, "promises": [], "sweepLog": [],
+            "suppressed": [{"ref": "ISSUE-000", "source": "issues",
+                            "context": "Sigma Partners",
+                            "reason": "Self-created by an earlier run."}],
+        }))
         cfg = tmp / "config.json"
         cfg.write_text(json.dumps({
             "identity": {"name": "t"},
@@ -167,6 +171,20 @@ def main():
         check(
             result.returncode == 0 and len(payload["sweep"]) == 3,
             "--json emits a machine-readable plan the skill can act on",
+        )
+        # The plan is where a sweep is TOLD what it must not raise. Before this,
+        # `suppressed` had no reader anywhere, so obeying it depended on a model
+        # remembering the field existed.
+        refs = {e["ref"] for e in payload["suppressedRefs"]}
+        check(
+            refs == {"ISSUE-000"},
+            "a suppressed ref is reported in the plan, and an unsuppressed one "
+            "is not",
+        )
+        check(
+            "suppressed" not in payload,
+            "the key is `suppressedRefs`: `suppressed` already means the derived "
+            "board term everywhere else in the JSON contract",
         )
 
     print()

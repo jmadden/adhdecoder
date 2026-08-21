@@ -40,6 +40,9 @@ Usage:
     ledger_write.py --config CFG draft-mark-met --id ID --reason R
     ledger_write.py --config CFG snooze --id ID --until YYYY-MM-DD --reason R
     ledger_write.py --config CFG snooze --id ID --unsnooze
+    ledger_write.py --config CFG suppress --ref REF --reason R [--source S]
+                                                [--context C] [--record-id ID]
+    ledger_write.py --config CFG suppress --ref REF --unsuppress
     ledger_write.py --config CFG record-sweep   [--sources-json JSON] [--now ISO]
     ledger_write.py --config CFG mark-seen --id ID [--id ID ...]
 
@@ -63,6 +66,7 @@ import ledger_query as lq  # noqa: E402
 import verify_note_write  # noqa: E402
 from ledger_schema import (  # noqa: E402
     SCHEMA_VERSION,
+    SUPPRESSED,
     SWEEP_LOG_CAP,
     VERIFY_STATUSES,
     PROJECT_STATUSES,
@@ -906,6 +910,123 @@ def op_promote(args, config, now):
     return 0
 
 
+def _find_suppression(entries, ref):
+    """Index of the entry suppressing `ref`, or None. Case-folded exact match.
+
+    Case-folding and whitespace are the only normalisation, deliberately: no
+    substring match, no scanning a url for an id it happens to contain. A missed
+    suppression is recoverable noise on one sweep; a wrongly-matched one silently
+    hides a real ask, which is the failure this whole field exists to prevent.
+    """
+    wanted = str(ref or "").strip().casefold()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("ref") or "").strip().casefold() == wanted:
+            return index
+    return None
+
+
+def op_suppress(args, config, now):
+    """Stop the sweep from ever turning a source ref into a promise again.
+
+    `suppressed[]` was documented, schema-declared and doctor-validated, and had
+    no writer - so the only route was hand-editing `state.json`, the one write
+    method `reference/ledger-schema.md` names as the source of every stale entry
+    in the wild. The single live entry in the wild got there exactly that way.
+
+    NOT routed through `_route`, unlike `snooze`. A suppression is not per-promise
+    metadata that has to follow a record into the `itemMeta` companion; it is a
+    top-level list about a SOURCE ref, so there is one place for it whatever
+    backend is active. No note is written in any write mode, and there is no
+    `--confirmed`: that flag exists for ops that create files in the user's vault
+    and diluting it weakens the one place it matters.
+
+    `--reason` is required because `validate-state.py` already treats a reasonless
+    entry as a gap, so writing one would emit a `doctor` failure by construction -
+    and because a suppressed ref that cannot explain itself becomes permanent by
+    default.
+
+    The entry is built from `ledger_schema.SUPPRESSED` field names only. That
+    matters here more than elsewhere: `validate_state` type-checks the container
+    and never the entries, so `commit()`'s delta check cannot catch a malformed
+    suppression. The gate has to be on this side, the same reason `op_snooze`
+    validates its date inline.
+    """
+    ref = str(args.ref or "").strip()
+    if not ref:
+        raise Refused("suppress needs a non-empty --ref: the source ref to stop raising")
+    if not args.unsuppress and not args.reason:
+        raise Refused(
+            "`suppress` requires --reason: an unexplained suppression is "
+            "indistinguishable from a bug, `validate-state.py` reports one as a gap, "
+            "and a ref nothing can justify silencing becomes permanent by default"
+        )
+
+    state = read_state(config.state_file)
+    before = digest(config.state_file)
+    problems_before = validate_state(state)
+
+    entries = state.setdefault("suppressed", [])
+    if not isinstance(entries, list):
+        raise Refused(
+            "`suppressed` is a %s, not a list; refusing to write over it by hand"
+            % type(entries).__name__
+        )
+    found = _find_suppression(entries, ref)
+
+    if args.unsuppress:
+        # The only operation that may shorten this list. Deliberately asymmetric
+        # with a duplicate `suppress`, which is a benign no-op because the end
+        # state it asked for already holds: un-suppressing a ref that is not
+        # suppressed means the caller's model of the file is wrong, and reporting
+        # success would hide a typo while a real suppression stayed in place.
+        if found is None:
+            raise Refused(
+                "%r is not suppressed, so there is nothing to clear. Run `doctor` "
+                "to see what is." % ref
+            )
+        removed = entries[found]
+        if args.dry_run:
+            print("DRY RUN: would un-suppress %s (%s)"
+                  % (ref, removed.get("reason") or "no reason recorded"))
+            return 0
+        del entries[found]
+        backup_path = backup(config.state_file, config.instance_path)
+        commit(config.state_file, state, before, backup_path, problems_before)
+        print("un-suppressed %s - the sweep may raise it again" % ref)
+        return 0
+
+    if found is not None:
+        # Benign duplicate: print and return 0 rather than erroring or appending,
+        # as `mark-seen` does for an id already in dedup.seen. Append-only means
+        # the existing entry and its original reason are left exactly as they are.
+        print("already suppressed (%s)"
+              % (entries[found].get("reason") or "no reason recorded"))
+        return 0
+
+    entry = {"ref": ref, "reason": args.reason.strip(),
+             "ts": now.isoformat(timespec="seconds")}
+    for field, value in (("recordId", args.record_id), ("source", args.source),
+                         ("context", args.context)):
+        if value:
+            entry[field] = value
+    unknown = set(entry) - SUPPRESSED
+    if unknown:
+        raise Refused("internal error: suppression carries undeclared field(s) %s"
+                      % ", ".join(sorted(unknown)))
+
+    if args.dry_run:
+        print("DRY RUN: would suppress %s - %s" % (ref, entry["reason"]))
+        return 0
+
+    entries.append(entry)
+    backup_path = backup(config.state_file, config.instance_path)
+    commit(config.state_file, state, before, backup_path, problems_before)
+    print("suppressed %s - %s" % (ref, entry["reason"]))
+    return 0
+
+
 def op_mark_seen(args, config, now):
     state = read_state(config.state_file)
     before = digest(config.state_file)
@@ -1108,6 +1229,7 @@ OPS = {
     "record-verify": op_record_verify,
     "draft-mark-met": op_draft_mark_met,
     "snooze": op_snooze,
+    "suppress": op_suppress,
     "record-sweep": op_record_sweep,
     "mark-seen": op_mark_seen,
 }
@@ -1174,6 +1296,16 @@ def main(argv=None):
     p_snooze.add_argument("--until", default=None, help="quiet until YYYY-MM-DD")
     p_snooze.add_argument("--reason", default=None, help="required unless --unsnooze")
     p_snooze.add_argument("--unsnooze", action="store_true")
+
+    p_suppress = sub.add_parser(
+        "suppress", help="stop the sweep raising a source ref, or clear that")
+    p_suppress.add_argument("--ref", required=True, help="the source ref to silence")
+    p_suppress.add_argument("--reason", default=None, help="required unless --unsuppress")
+    p_suppress.add_argument("--source", default=None, help="source type, e.g. issues")
+    p_suppress.add_argument("--context", default=None, help="customer/context name")
+    p_suppress.add_argument("--record-id", default=None,
+                            help="the SOURCE system's record id, not a promise id")
+    p_suppress.add_argument("--unsuppress", action="store_true")
 
     p_sweep = sub.add_parser("record-sweep", help="stamp lastSwept + append a sweepLog entry")
     p_sweep.add_argument("--sources-json", default=None, help="JSON {source: result}; stdin if omitted")

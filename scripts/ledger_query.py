@@ -505,6 +505,10 @@ def decorate(promise, now):
     )
     # A pending draft outranks a board dismissal: dismissal means "stop showing
     # me this as work", a draft is an unanswered question about the record.
+    # `_suppressed` is a BOARD term - "do not render this card right now". The
+    # top-level `state["suppressed"]` list is a different concept at a different
+    # layer (source refs the sweep must not raise); read it via
+    # suppressed_source_refs().
     promise["_suppressed"] = promise["_snoozed"] or (
         promise["_dismissed"] and not promise["_readyToClose"]
     )
@@ -566,6 +570,44 @@ def read_state(config):
             "If another session (a scheduled run, another instance) is writing it "
             "right now, re-run in a moment. Nothing was changed." % (error, config.state_file)
         )
+
+
+# --------------------------------------------------------------------------
+# suppressed source refs (NOT the derived board term - see below)
+# --------------------------------------------------------------------------
+
+def suppressed_source_refs(state):
+    """The source refs the sweep must never turn into a promise again.
+
+    Four things in this codebase are called some variant of "suppressed", and
+    only this one is a list of source refs: `state["suppressed"]`, written by
+    `ledger_write.py suppress`. The other three all mean the derived board term
+    "do not render this card right now" - `promise["_suppressed"]`, the
+    `derived.suppressed` key `public()` emits, and the `--select suppressed`
+    selector. Different concept, different layer, same word.
+
+    Lives here because the read belongs in one place: a sweep that re-derived
+    this from prose is exactly how a ref marked dead came back a third time.
+    Takes a plain state dict rather than a Config, so both `meta["state"]` and a
+    caller with its own `json.load` (`sweep_plan.py`) use the same reader.
+
+    Sorted, and defensive about malformed entries, because a hand-written list is
+    the only kind that existed before `suppress` did.
+    """
+    entries = []
+    for entry in state.get("suppressed") or []:
+        if not isinstance(entry, dict):
+            continue
+        ref = str(entry.get("ref") or "").strip()
+        if not ref:
+            continue
+        kept = {"ref": ref}
+        for field in ("recordId", "source", "context", "reason", "ts"):
+            value = entry.get(field)
+            if value:
+                kept[field] = value
+        entries.append(kept)
+    return sorted(entries, key=lambda e: e["ref"].casefold())
 
 
 # --------------------------------------------------------------------------
@@ -1006,6 +1048,9 @@ SELECTORS = (
     "waiting", "owed", "upcoming", "snoozed",
 )
 
+# `suppressed` here is the derived board term, emitted as `derived.suppressed`
+# and accepted as `--select suppressed`. It is NOT `state["suppressed"]`, the list
+# of source refs the sweep must not raise (see suppressed_source_refs()).
 DERIVED_FIELDS = (
     "open", "overdue", "dueToday", "dueSoon", "softPast", "snoozed", "staleDays",
     "stale", "driftCleared", "readyToClose", "dismissed", "suppressed", "flagged",

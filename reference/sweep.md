@@ -12,6 +12,12 @@ understand or change the behaviour; change the script in the same commit:
 - **every write** (reality gate, schema, dedup against the full union,
   append-only history, atomic write, rollback, concurrent-writer guard) is
   `scripts/ledger_write.py`
+- **which source refs must never be raised** is the `suppressedRefs` list in
+  `scripts/sweep_plan.py`'s output, read from `state["suppressed"]` via
+  `ledger_query.suppressed_source_refs()`. This one was neither code nor prose
+  until 2026-08-21: the field existed with no reader anywhere, so honouring it
+  depended on a model remembering it existed, and a ref marked dead came back on
+  a later run.
 
 What stays prose, because it needs reading rather than string equality: finding
 candidates in each source, deciding whether the user owes the next move, and
@@ -64,6 +70,15 @@ the user (that is the "worked it partway then got distracted" failure).
   automated / no-reply senders filtered out.
 - **Dedup, never duplicate.** Read the ledger backend (and any adapter-backed
   store) first; attach/enrich an existing item instead of creating a second one.
+- **Never raise a suppressed ref.** A candidate whose source ref appears in the
+  plan's `suppressedRefs` is dropped: no promise, no enrich, no mention. Do not
+  re-derive this from memory - the plan reports it every run. Matching is
+  **case-folded exact on the ref**, whitespace-trimmed, and nothing more: no
+  substring match, no scanning a url for an id it happens to contain. A missed
+  suppression is recoverable noise on one sweep; a wrongly-matched one silently
+  hides a real ask. Add an entry with `ledger_write.py suppress --ref REF
+  --reason "<why>"`; the reason is required because a suppressed ref that cannot
+  explain itself becomes permanent by default.
 - **Hide raw feeds.** Link to the source; never paste raw thread/email content
   into the ledger.
 - **Always read the full thread; never trust a mention/keyword search alone.**

@@ -145,6 +145,25 @@ in a collapsed **Snoozed (N)** group, so a hold stays reviewable.
 Do not confuse this with `project-set --snooze <project-id>`, which quiets a
 project's rollup and deliberately leaves its members surfacing.
 
+**Suppress a source ref.** Stop the sweep ever turning a source ref into a
+promise again - a dead lead, a record an earlier run created for itself, a
+wrong-attribution hit.
+
+```
+ledger_write.py --config <cfg> suppress --ref <source-ref> --reason "<why>" \
+    [--source <type>] [--context <name>] [--record-id <source-system-id>]
+ledger_write.py --config <cfg> suppress --ref <source-ref> --unsuppress
+```
+
+This suppresses a **source ref**, not a promise: a snooze or a board dismissal
+hides a card, this stops one from ever being created. `--reason` is required (an
+unexplained suppression is indistinguishable from a bug, and `doctor` reports one
+as a gap). Append-only - a repeat `--ref` is a no-op that leaves the original
+reason alone, and `--unsuppress` is the only thing that may remove an entry. It
+writes no note in any write mode. `sweep_plan.py` reports the list as
+`suppressedRefs` so the sweep is told rather than trusted to remember, and the
+board recap carries a `suppressed N` count.
+
 **Mark ongoing (set deadlineType).** Set `deadlineType` to `soft`/`none` (ongoing,
 no date-chasing) or back to `hard`. Builtin -> on the record; a read-only backend ->
 `itemMeta[<id>]` override, never the note.

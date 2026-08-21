@@ -375,6 +375,15 @@ def main():
             "| snoozed 1" in stdout and "snoozed: %s" % eta in stdout,
             "the recap counts the snooze and names it",
         )
+        # A different concept with the same word: state["suppressed"] is the
+        # sweep's list of source refs, not the derived `_suppressed` above. The
+        # count belongs on every recap so a growing list is visible without
+        # anyone having to run `doctor`.
+        check(
+            "| suppressed 1" in stdout,
+            "the recap counts the suppressed SOURCE REFS too, so the list is not "
+            "invisible between doctor runs",
+        )
         check(
             "Configure the Zeta test tenant" not in html,
             "a dismissed item with no pending draft is excluded",

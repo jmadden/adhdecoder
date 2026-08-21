@@ -14,6 +14,11 @@ breaking ties, because weight sets depth-of-coverage for the run. Weight never
 decides whether a source is swept, only how early and how hard - urgency
 outranks it everywhere else in the system.
 
+It also reports `suppressedRefs`: the source refs the sweep must never turn into
+a promise again (`state["suppressed"]`, written by `ledger_write.py suppress`).
+That list had no reader anywhere, so honouring it depended on a model happening
+to remember it existed - which is how a ref marked dead came back a third time.
+
 Usage:
     sweep_plan.py --config CFG [--now ISO] [--scope every-run|due|all] [--json]
 
@@ -160,11 +165,18 @@ def main(argv=None):
 
     decided = plan(config, state, now, args.scope)
     included = [d for d in decided if d["include"]]
+    # Reported, not left to memory. Nothing in `reference/sweep.md` or the sweep
+    # skill mentioned suppressions at all, so the list was inert: a ref marked
+    # dead came back on the next run because no step ever looked. Named
+    # `suppressedRefs`, because `suppressed` already means the derived board term
+    # everywhere else in the JSON contract (ledger_query.DERIVED_FIELDS).
+    suppressed = lq.suppressed_source_refs(state)
 
     if args.json:
         json.dump(
             {"now": now.isoformat(), "scope": args.scope,
-             "sweep": included, "skip": [d for d in decided if not d["include"]]},
+             "sweep": included, "skip": [d for d in decided if not d["include"]],
+             "suppressedRefs": suppressed},
             sys.stdout, indent=2, sort_keys=True,
         )
         print()
@@ -178,6 +190,12 @@ def main(argv=None):
         print("skip:")
         for entry in skipped:
             print("  %-22s %s" % (entry["key"], entry["reason"]))
+    # No header when the list is empty: a permanent zero-state row trains the eye
+    # to skip the whole block.
+    if suppressed:
+        print("never raise (suppressed refs):")
+        for entry in suppressed:
+            print("  %-22s %s" % (entry["ref"], entry.get("reason") or "no reason recorded"))
     return 0
 
 

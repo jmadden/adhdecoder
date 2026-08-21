@@ -466,6 +466,100 @@ def main():
             "not one note was touched across the whole snooze block",
         )
 
+        # --- suppress: a source ref the sweep must never raise again ------------
+        # The field was documented, schema-declared and doctor-validated with no
+        # writer at all, so the only route was hand-editing state.json - and no
+        # reader anywhere, so a ref marked dead came back on the next sweep.
+        sup_mtimes = {p: p.stat().st_mtime_ns
+                      for p in sorted((tmp / "vault").rglob("*.md"))}
+        result = run(config_path, ["suppress", "--ref", "ISSUE-777",
+                                   "--source", "issues", "--context", "Example CU",
+                                   "--record-id", "rec-777",
+                                   "--reason", "watcher-only ref; nobody has asked us anything"])
+        state = json.loads(state_path.read_text())
+        written = [e for e in state["suppressed"] if e["ref"] == "ISSUE-777"]
+        check(
+            result.returncode == 0 and len(written) == 1,
+            "a suppression is appended to state['suppressed'] exactly once",
+        )
+        check(
+            written and written[0]["reason"].startswith("watcher-only")
+            and written[0]["ts"] == NOW
+            and written[0]["source"] == "issues"
+            and written[0]["recordId"] == "rec-777",
+            "...carrying the reason, the clock, and the optional source fields",
+        )
+        check(
+            written and set(written[0]) <= {"ref", "recordId", "source", "context",
+                                            "reason", "ts"},
+            "...and nothing outside ledger_schema.SUPPRESSED, which is the gate "
+            "that an undeclared `ts` slipped past before it was declared",
+        )
+
+        # the reader must agree, or the writer wrote somewhere nothing looks
+        probe = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "sweep_plan.py"),
+             "--config", str(config_path), "--now", NOW, "--json"],
+            capture_output=True, text=True,
+        )
+        plan_refs = {e["ref"] for e in json.loads(probe.stdout)["suppressedRefs"]}
+        check(
+            "ISSUE-777" in plan_refs,
+            "the sweep plan reports it, so the sweep is told rather than trusted "
+            "to remember",
+        )
+
+        before_bytes = state_path.read_bytes()
+        result = run(config_path, ["suppress", "--ref", "issue-777",
+                                   "--reason", "a second, different reason"])
+        check(
+            result.returncode == 0 and "already suppressed" in result.stdout
+            and state_path.read_bytes() == before_bytes,
+            "a repeat --ref is a case-folded no-op returning 0, and append-only "
+            "means the original reason is left exactly as it was",
+        )
+        result = run(config_path, ["suppress", "--ref", "ISSUE-888"])
+        check(
+            result.returncode == 1 and "requires --reason" in result.stderr,
+            "a suppression with no reason is refused; validate-state.py already "
+            "reports one as a gap, so writing it would fail `doctor` by construction",
+        )
+        result = run(config_path, ["suppress", "--ref", "ISSUE-888", "--unsuppress"])
+        check(
+            result.returncode == 1 and "not suppressed" in result.stderr,
+            "un-suppressing a ref that is not suppressed is REFUSED, not a no-op - "
+            "reporting success would hide a typo while a real suppression stayed",
+        )
+        check(
+            state_path.read_bytes() == before_bytes,
+            "every refused suppress left the ledger byte-identical",
+        )
+        result = run(config_path, ["--dry-run", "suppress", "--ref", "ISSUE-888",
+                                   "--reason", "later"])
+        check(
+            result.returncode == 0 and "DRY RUN" in result.stdout
+            and state_path.read_bytes() == before_bytes,
+            "--dry-run reports and writes nothing",
+        )
+        result = run(config_path, ["suppress", "--ref", "ISSUE-777", "--unsuppress"])
+        state = json.loads(state_path.read_text())
+        check(
+            result.returncode == 0
+            and not [e for e in state["suppressed"] if e["ref"] == "ISSUE-777"],
+            "--unsuppress removes the entry; it is the only op that may shorten "
+            "the list",
+        )
+        check(
+            any(e["ref"] == "ISSUE-000" for e in state["suppressed"]),
+            "...and removes only that one, leaving the rest of the list intact",
+        )
+        check(
+            {p: p.stat().st_mtime_ns for p in sorted((tmp / "vault").rglob("*.md"))}
+            == sup_mtimes,
+            "not one note was touched across the whole suppress block - a "
+            "suppression is ADHDecoder bookkeeping, not task truth",
+        )
+
         # --- capture: create a task note where the user works -------------------
         vault_tasks = tmp / "vault" / "Tasks"
         before_count = len(list(vault_tasks.glob("*.md")))

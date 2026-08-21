@@ -68,6 +68,11 @@ are the only ones deliberately kept off the work groups, so the count is the one
 signal that a pile is building - and a snooze that has quietly outlived its reason
 is work the user thinks is handled. If any are past due to return, say so.
 
+The recap's `suppressed N` is a different thing wearing the same word: source refs
+the sweep must never raise again, not cards being hidden. Relay the count only.
+It has no per-item lines by design - the reasons are `doctor`'s check 7 to report -
+so if the number looks high or has grown, point at `doctor` rather than guessing.
+
 ## First run
 
 If config is absent or thin (no backend + identity), do not invent paths - route

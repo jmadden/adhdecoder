@@ -40,6 +40,17 @@ ITEM_META = {
     "verifyStatus", "verifyReason", "lastVerified", "source", "noteOnly",
     "dismissedFromBoard", "markMetDraft", "updateDraft", "appliedMarkMet",
 }
+# One entry of the top-level `suppressed` list: a SOURCE REF the sweep must never
+# turn into a promise again. Nothing to do with the derived board term
+# `promise["_suppressed"]` (snoozed-or-dismissed), which is a different concept at
+# a different layer.
+#
+# Declared here rather than left to prose because the container-only type check
+# below is what let an undeclared `ts` into a real ledger unnoticed: a field was
+# legal to write and unknown to `doctor`, which is the one thing this module
+# exists to prevent. `ts` is now declared, written by `suppress`, and absent on
+# hand-written legacy entries.
+SUPPRESSED = {"ref", "recordId", "source", "context", "reason", "ts"}
 
 # --- deprecated: recognised, reported as a note, never written again ------
 DEPRECATED = {
@@ -58,6 +69,7 @@ DEPRECATED = {
 
 LEVEL_KEYS = {
     "top": TOP_LEVEL, "promise": PROMISE, "itemMeta": ITEM_META, "project": PROJECT,
+    "suppressed": SUPPRESSED,
 }
 
 # --- legal values ---------------------------------------------------------

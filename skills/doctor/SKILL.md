@@ -102,7 +102,8 @@ Run each and report OK or a gap. Match field names to
    ```
 
    It reports the declared `schemaVersion`, then every field the schema does not
-   define, at all three levels (top level / promise record / itemMeta entry):
+   define, at every level the schema defines (top level, promise record, itemMeta
+   entry, project record, `suppressed` entry):
    - **unknown key -> a gap.** A field no schema version defines is a run that
      invented vocabulary. Report it with "name it in `ledger-schema.md` or remove
      it by hand."
@@ -117,14 +118,19 @@ Run each and report OK or a gap. Match field names to
    - **Validate, never repair.** Do not rename a field, do not remove one, and
      do not bump `schemaVersion`. Report the edit; the user applies it.
 
-7. **Suppressions and sweep results** (`state.json`). Both are run-level facts no
-   board renders, so this is their surface. The **mechanical** half is in the same
+7. **Suppressions and sweep results** (`state.json`). The board recap carries a
+   bare `suppressed N` count and `sweepLog` has no surface at all, so this is
+   where either is actually accounted for. The **mechanical** half is in the same
    validator run as check 6: a `suppressed` entry with no `reason` reports as a
-   gap, and a malformed or over-cap `sweepLog` reports as a note. Relay those.
+   gap, an undefined key on one reports as a gap, and a malformed or over-cap
+   `sweepLog` reports as a note. Relay those.
 
    The **reading** half is yours, and it is why this check is not only code:
-   - Report each suppression's `reason` in one line, so a suppressed ref stays
-     accountable rather than becoming permanent by default.
+   - Report each suppression's `reason` in one line, with its `ts` when it has
+     one, so a suppressed ref stays accountable rather than becoming permanent by
+     default. An old suppression with no reason anyone still recognises is the
+     thing to raise. Clearing one is `ledger_write.py suppress --ref REF
+     --unsuppress`; never hand-edit the list.
    - Read the most recent `sweepLog` entry's per-source results and say whether
      any source is **responding but returning nothing**. A presence-only
      connector check (check 4) scores such a source OK, so this is the only place
