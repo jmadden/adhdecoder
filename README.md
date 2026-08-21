@@ -112,9 +112,12 @@ doctor", "is this configured right", "diagnose ADHDecoder", or "why isn't
 the decoder working". It reports each check as OK or a gap with a one-line
 fix - runtime, config, backend, write mode, record-store integrity, schema,
 connector presence, suppressions/sweep results - and never repairs anything
-itself. Connector presence is deliberately reported as `unchecked` rather
-than a false "OK", because a subprocess cannot see which MCP connectors the
-running session has attached. Schema integrity exists because the schema used
+itself. Suppressions are the one place it still does the reading: the board
+recap carries a bare count, so `doctor` is where each suppressed ref has to
+account for its reason rather than becoming permanent by default. Connector
+presence is deliberately reported as `unchecked` rather than a false "OK",
+because a subprocess cannot see which MCP connectors the running session has
+attached. Schema integrity exists because the schema used
 to be prose only: different runs invented different field names for "this
 note is malformed," and one of those inventions was write-only - a run
 recorded a damaged note and nothing surfaced it for weeks.
@@ -264,7 +267,13 @@ specific failure that justified building it: search alone was proven
 unreliable against real data when a concise mention search showed two
 customers' threads as unanswered when the user had actually already replied
 and acted the same day - both false alarms that reading the full thread
-would have caught.
+would have caught. A sweep is also blocked from re-raising a ref you have
+retired: `suppress` records a source ref that must never become a promise
+again (with a required reason), and `add` refuses one outright, so the block
+is enforced rather than remembered. That gate exists because of its own
+specific failure - a ticket where the user was only a watcher was captured,
+correctly marked met, and then reopened by a later scheduled sweep, costing
+three rounds of attention for work that had already shipped.
 
 ## Install (Claude Code)
 
