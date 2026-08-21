@@ -1048,9 +1048,11 @@ SELECTORS = (
     "waiting", "owed", "upcoming", "snoozed",
 )
 
-# `suppressed` here is the derived board term, emitted as `derived.suppressed`
-# and accepted as `--select suppressed`. It is NOT `state["suppressed"]`, the list
-# of source refs the sweep must not raise (see suppressed_source_refs()).
+# `suppressed` here is the derived board term, emitted as `derived.suppressed`.
+# It is NOT `state["suppressed"]`, the list of source refs the sweep must not
+# raise (see suppressed_source_refs()). Note there is deliberately no
+# `--select suppressed`: SELECTORS above filters suppressed items OUT, so a
+# selector of that name would mean the opposite of every other one.
 DERIVED_FIELDS = (
     "open", "overdue", "dueToday", "dueSoon", "softPast", "snoozed", "staleDays",
     "stale", "driftCleared", "readyToClose", "dismissed", "suppressed", "flagged",

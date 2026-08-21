@@ -83,10 +83,11 @@ plus the minimum needed to track and dedup. Everything else it references via
   loudly instead of quietly hiding a real ask. `capture` is deliberately not
   gated: it runs with the user present asking for that task by name, and refusing
   an explicit human ask answers the wrong question.
-  Note the word is overloaded: `promise["_suppressed"]`, the emitted
-  `derived.suppressed`, and `--select suppressed` all mean the derived **board**
-  term ("do not render this card now"), which is a different concept at a
-  different layer.
+  Note the word is overloaded: `promise["_suppressed"]` and the emitted
+  `derived.suppressed` both mean the derived **board** term ("do not render this
+  card now"), which is a different concept at a different layer. There is
+  deliberately no `--select suppressed`: every selector filters suppressed items
+  out, so one by that name would mean the opposite of all the others.
 - **people** — `{ "<name>": { pronouns, note, recordedAt } }`. Facts about a
   person that ADHDecoder would otherwise get wrong, most importantly
   **pronouns**. **Any skill writing copy that refers to a person MUST read this
